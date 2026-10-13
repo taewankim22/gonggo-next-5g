@@ -122,7 +122,10 @@ def bootstrap():
     st.session_state['_draft_loaded']=True
     st.rerun()
 
+@st.fragment
 def save_browser():
+    # IndexedDB acknowledgements must not rerun the whole app: a full rerun
+    # interrupts an in-flight Studio poll and discards its completed result.
     payload=snapshot(st.session_state)
     if st.session_state.get('_draft_storage_error'):
         st.warning('브라우저 저장을 사용할 수 없습니다. 준비 목록을 내려받으세요. 설정에서 저장 내용을 초기화하거나 브라우저 저장 허용을 확인할 수 있습니다.')
