@@ -50,6 +50,7 @@ button[kind="secondary"],[data-testid="stBaseButton-secondary"]{background:white
 .metric-value{font-size:1.35rem;line-height:1.45;letter-spacing:-.045em;font-weight:800;overflow-wrap:anywhere;min-height:2rem}
 .metric-value.method{font-size:1.08rem}
 .st-key-metric_deadline,.st-key-metric_submission,.st-key-metric_progress{background:white;border-radius:15px!important;min-height:150px;justify-content:space-between}
+.st-key-metric_deadline>div,.st-key-metric_submission>div,.st-key-metric_progress>div,[class*="st-key-document_card_"]>div{flex-shrink:0!important}
 .st-key-prep_metrics [data-testid="stPopover"] button{font-size:.75rem;font-weight:500;min-height:32px;background:transparent;border:0;padding:0;justify-content:flex-start;color:#a72361}
 .action-list{background:white;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:1rem}
 .next-action{display:flex;align-items:center;gap:14px;padding:17px 20px;border-bottom:1px solid #eee}.next-action:last-child{border:0}
@@ -73,6 +74,8 @@ button[kind="secondary"],[data-testid="stBaseButton-secondary"]{background:white
 .review-card{background:white;border:1px solid var(--line);border-radius:16px;padding:1.3rem;margin:.7rem 0;overflow-wrap:anywhere}.review-card h3{margin:0 0 .7rem!important;font-size:1.06rem!important}.review-card p{font-size:.9rem}.badge{float:right;padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:700}.action{border-top:1px solid #eee;padding-top:.8rem;color:#98265f}
 [data-testid="stMetric"]{background:white;border:1px solid var(--line);border-radius:14px;padding:12px}
 .stMarkdown{overflow-wrap:anywhere}
+/* Streamlit removes a paragraph's trailing margin; our HTML blocks have none. */
+.stMarkdown [data-testid="stMarkdownContainer"]:has(> :is(.document-tags,.metric-label,.condition-head,.condition-title,.condition-answer,.mobile-label,.brandline,.hero-eyebrow,.action-list,.hero,.section-anchor)){margin-bottom:0!important}
 @media(max-width:640px){
  .block-container{padding:3.8rem 1rem 2rem}.brandline{padding-bottom:14px}.st-key-home_hero{padding:23px 20px!important}.st-key-home_primary button{min-height:76px!important;font-size:1rem!important}
  .st-key-wizard_nav button{font-size:.7rem!important;padding:5px 4px!important}.st-key-wizard_nav [data-testid="stHorizontalBlock"]{gap:4px!important}
