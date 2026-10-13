@@ -51,7 +51,7 @@ export default function(component) {
   processed.set(key,{signature,message:label.textContent});
   queue=queue.then(()=>transaction(data.op,data.payload,knownRevision ?? data.revision,data.digest)).then(value=>{
     if(value?.status!=='conflict' && value?.revision!==undefined) knownRevision=value.revision;
-    const message=value?.status==='conflict' ? '다른 탭의 변경을 보호하기 위해 저장을 중지했습니다.' : data.op === 'save' ? '이 브라우저에 저장 완료 · API 키 제외'
+    const message=value?.status==='conflict' ? '다른 탭의 변경을 보호하기 위해 저장을 중지했습니다.'
       : data.op === 'delete' ? '저장한 준비 내용을 삭제했습니다.' : '';
     processed.set(key,{signature,message});
     label.textContent=message;

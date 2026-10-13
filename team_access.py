@@ -174,9 +174,6 @@ def team_gate(root,required=False,password_required=True):
             else:
                 st.error('팀 암호를 확인해주세요.')
         st.stop()
-    label='팀 전용 연결' if config.require_password else '공개 테스트 · 암호 없이 이용 가능'
-    usage=f'오늘 AI 호출 {ledger.used()}회 · 횟수 제한 없음' if config.daily_limit==0 else f'오늘 AI 호출 {ledger.used()} / {config.daily_limit}회'
-    st.caption(f'{label} · {usage} · 한국 시간 기준')
     if config.require_password and st.button('팀 접속 종료'):
         st.session_state.clear()
         st.rerun()
