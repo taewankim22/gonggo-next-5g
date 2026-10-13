@@ -297,7 +297,6 @@ if screen==3:
         for key in keys:
             widget='answer_'+key
             if key=='review_stage':continue
-            st.caption('확인하는 조건 · '+LABELS[BASIC[key]])
             if key in ('remaining_terms','weekly_visits','weekly_hours'):
                 label={'remaining_terms':'공고 기준일의 잔여학기','weekly_visits':'주당 방문 가능한 횟수','weekly_hours':'주당 총 활동 가능한 시간'}[key]
                 a[key]=st.number_input(label,min_value=0,max_value=100,value=None,step=1,key=widget,placeholder='모르면 비워두세요',on_change=explicit_basic,args=(st.session_state,key))
@@ -323,7 +322,6 @@ if screen==3:
         questions,later_questions,covered=additional_questions(n,keys,items,stage)
         qa={}
         def draw_question(question):
-            st.caption('확인하는 조건 · '+question['condition_label'])
             if question.get('context'):st.caption('공고의 활동 의무: '+question['context'])
             widget='question_'+scope+'_'+question['id']
             if question.get('kind')=='social_support':
