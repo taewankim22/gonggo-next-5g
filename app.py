@@ -7,7 +7,8 @@ import streamlit as st
 from dotenv import load_dotenv
 from core import read_pdf, fingerprint, validate_payload, guard_review, action_list
 from schema_builder import notice_schema, review_schema
-from upstage_client import run_agent, StudioError
+from upstage_client import run_agent as studio_run_agent, StudioError
+from team_access import team_gate, protected_call
 from pdf_tools import comparison_pdf
 from input_tools import inspect_input, parse_pages, map_image_page
 from prepare_demo import sample_review
@@ -75,6 +76,12 @@ hr{border-color:var(--line)}
 @media(prefers-reduced-motion:reduce){.story-ring,button{transition:none!important}}
 </style>''',unsafe_allow_html=True)
 
+settings=json.loads((ROOT/'settings.json').read_text(encoding='utf-8')) if (ROOT/'settings.json').exists() else {}
+team,team_ledger=team_gate(ROOT,required=settings.get('team_required',False))
+def run_agent(*args,**kwargs):
+    return protected_call(team,st.session_state,team_ledger,studio_run_agent,*args,**kwargs)
+
+# Authenticate before restoring any browser draft or rendering app controls.
 # Retain inputs independently of Streamlit's cleanup for hidden widgets.
 for state_key in list(st.session_state):
     if state_key.startswith(('answer_', 'question_', 'doc_')) or state_key in ('profile_preset','schedule_state','show_later_questions'):
@@ -92,19 +99,24 @@ def clear_answers():
 
 st.markdown('<div class="brandline"><div class="brandword">공고다음<span>YOUR NEXT OPPORTUNITY</span></div><div class="brandnote">나에게 맞는 기회, 준비하는 방법.</div></div>',unsafe_allow_html=True)
 
-settings=json.loads((ROOT/'settings.json').read_text(encoding='utf-8')) if (ROOT/'settings.json').exists() else {}
 with st.expander('설정 · 사용 모드와 Upstage 연결', expanded=False):
     st.markdown('### 공고다음')
     st.caption('5G · 나의 다음 기회')
     mode=st.radio('사용 모드',['실제 AI 분석','예시 화면 체험'],index=1 if st.session_state.get('last_mode')=='예시 화면 체험' else 0,help='예시는 사람이 작성한 조건 데이터와 고정 규칙을 사용합니다. API를 호출하지 않습니다.')
-    with st.container():
+    if team:
+        api_key=''
+        notice_id,notice_version=team.notice_id,team.notice_version
+        review_id,review_version=team.review_id,team.review_version
+        st.info('팀 전용 Upstage 연결을 사용합니다. API 키와 Agent 설정은 운영자가 서버에서 관리합니다.')
+        st.caption(f'공고 분석·맞춤 검토 각각 1회, 실패 요청 포함 하루 팀 전체 {team.daily_limit}회. 동시 분석은 1건입니다. 접속은 2시간 후 만료됩니다.')
+    else:
         api_key=st.text_input('Upstage API 키',value='',type='password',help='현재 세션에서만 사용하며 파일에 저장하지 않습니다.')
         notice_id=st.text_input('공고 분석 Agent ID',value=os.getenv('NOTICE_AGENT_ID',settings.get('notice_agent_id','')))
         notice_version=st.text_input('공고 분석 설정 버전',value=os.getenv('NOTICE_CONFIG_ID',settings.get('notice_config_id','1')))
         review_id=st.text_input('맞춤 검토 Agent ID',value=os.getenv('REVIEW_AGENT_ID',settings.get('review_agent_id','')))
         review_version=st.text_input('맞춤 검토 설정 버전',value=os.getenv('REVIEW_CONFIG_ID',settings.get('review_config_id','1')))
         st.caption('키 값은 채팅·스크린샷에 포함하지 마세요. 입력한 키는 Upstage API 인증에만 사용됩니다.')
-    if os.getenv('GONGGO_DEVELOPER_TOOLS') == '1':
+    if not team and os.getenv('GONGGO_DEVELOPER_TOOLS') == '1':
         with st.expander('공개 샘플 3건 실제 검증',expanded=False):
             st.caption('개발 검증용: 서로 다른 PDF·JPG·PNG 공개 자료와 가상 답변을 현재 두 Agent로 실행합니다. API 6회가 호출되며 비밀값 없는 실행 증거를 로컬 verification 폴더에 저장합니다. 예시 화면과 구분됩니다.')
             if st.button('현재 설정으로 3건 검증 시작'):
@@ -128,7 +140,7 @@ with st.expander('설정 · 사용 모드와 Upstage 연결', expanded=False):
                     if res['source_filename'].lower().endswith(('.jpg','.png')):st.image(str(ROOT/'data'/res['source_filename']),use_container_width=True)
                     st.download_button(f'샘플 {i} 실행 결과 저장',json.dumps(res,ensure_ascii=False,indent=2),f'sample{i}.actual.json','application/json')
     st.divider()
-    st.caption('공고 원본·추출 내용·답변·체크는 이 브라우저에 자동 저장합니다. 같은 주소로 다시 접속하면 복원됩니다. API 키와 AI 상세 검토 결과는 저장하지 않습니다. 공용 컴퓨터에서는 사용 후 지워주세요.')
+    st.caption('공고 원본·추출 내용·답변·체크는 이 브라우저에 자동 저장합니다. 같은 주소로 다시 접속하면 복원됩니다. API 키와 팀 암호는 브라우저에 저장하지 않습니다. AI 상세 검토 결과도 자동 저장하지 않습니다. 공용 컴퓨터에서는 사용 후 지워주세요.')
     st.button('저장한 공고·답변·체크 지우기',on_click=clear_draft)
     st.caption('다른 기기·브라우저나 다른 사이트 주소로 자동 동기화하지 않습니다. 브라우저 데이터 삭제 시 저장 내용도 사라집니다.')
     st.caption('파일·답변은 서버의 공용 저장소에 기록하지 않습니다. 실제 분석 시 원본 파일과 답변이 Upstage로 전달됩니다.')
@@ -158,7 +170,7 @@ with st.container(key='wizard_nav'):
                    disabled=(number>1 and 'notice' not in st.session_state) or (number==4 and screen!=3 and 'draft_answers' not in st.session_state),on_click=go,args=(number,))
 st.progress(screen/4)
 if st.session_state.get('_draft_restored'):
-    st.caption('저장된 준비 내용을 복원했습니다. 새 AI 분석에는 API 키를 다시 입력하세요.')
+    st.caption('저장된 준비 내용을 복원했습니다.' if team else '저장된 준비 내용을 복원했습니다. 새 AI 분석에는 API 키를 다시 입력하세요.')
 if screen==1:
     st.markdown('<div class="hero"><div class="hero-body"><h1>발견한 기회를,<br>나의 다음으로.</h1><p>공고를 올리면 필요한 조건과 준비할 서류를 정리해 드려요.</p></div><div class="feed-footer">PDF · HWP · HWPX · JPG · PNG</div></div>',unsafe_allow_html=True)
     st.subheader('01 / 어떤 공고가 궁금한가요?')

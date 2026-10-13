@@ -1,0 +1,39 @@
+공고다음 · 팀 전용 실제 Upstage 연결
+
+1. Streamlit Community Cloud에서 gonggo-next-5g 앱의 메뉴 → Settings → Secrets를 엽니다.
+2. 아래 내용을 붙여 넣고 두 자리표시자만 본인의 API 키와 새 팀 암호로 바꿉니다.
+   팀 암호는 12자 이상으로 정하고 API 키와 다른 값을 사용하세요.
+3. Save를 누른 뒤 앱을 새로고침합니다. 설정이 없거나 잘못되면 접속을 허용하지 않습니다.
+4. 동료에게 사이트 주소와 팀 암호만 별도로 전달합니다. API 키는 전달하지 않습니다.
+
+[team]
+enabled = true
+api_key = "여기에_본인_Upstage_API_키"
+password = "여기에_12자_이상_새_팀_암호"
+notice_id = "agt_bmPkaZ9TyocTVn7Nw4BEbh"
+notice_version = "4"
+review_id = "agt_joPSsuMsD6vr7zNLzicGve"
+review_version = "2"
+daily_limit = 20
+
+사용 흐름
+- 팀 암호 → 공고 넣기 → 핵심 확인 → 내 상황 → 준비 목록.
+- 설정의 사용 모드는 '실제 AI 분석'으로 선택합니다.
+- 공개 평가용 공고를 체크하고 '공고에서 조건 찾기'를 누르면 실제 공고 분석 1회입니다.
+- '내 조건과 대조하기'는 별도의 실제 맞춤 검토 1회입니다.
+- 예시 화면 체험은 API를 호출하지 않습니다.
+- 공고와 답변은 앱 서버를 거쳐 Upstage로 전달됩니다.
+
+보관과 제한
+- API 키·암호는 Streamlit Secrets에만 보관하며 화면·브라우저 초안·공유 압축에 넣지 않습니다.
+- 키를 바꾸거나 팀 암호를 바꾸면 이전 접속은 다음 실행 시 무효화됩니다. 접속 유효기간 2시간.
+- 서버 공용 SQLite 장부로 한국 시간 하루 20회, 동시 1건, 호출 간격 10초를 적용합니다.
+- 실패 요청도 1회로 셉니다. 한 번의 Agent 실행은 여러 노드를 포함하며 요금 상한과 다릅니다.
+- 서버에 남는 장부는 호출 시각·임의 예약 ID·실행 상태·접속 시도 시각뿐입니다.
+- 클라우드 서버 재생성·재배포로 로컬 장부가 사라질 수 있어 영구적 비용 상한은 아닙니다.
+- 이 제한은 단일 Streamlit 서버용입니다. 여러 서버를 쓰려면 외부 공유 저장소가 필요합니다.
+- 본인 계정의 Upstage 크레딧을 사용합니다. 운영 종료 후 Secrets의 enabled=false로 차단하세요.
+- 실제 키나 암호를 이 안내 파일, settings.json, GitHub에 적지 마세요.
+
+로컬 개인 실행: settings.json에서 team_required=false이면 Secrets 없는 기존 개인 입력 방식이 가능합니다.
+공유 배포본은 team_required=true이므로 Secrets 없이 개인 입력 화면으로 우회되지 않습니다.
