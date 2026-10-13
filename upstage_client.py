@@ -1,5 +1,6 @@
 """Studio Responses API, based on the official hackathon starter's agent_client.py."""
 import json
+import logging
 import time
 from openai import OpenAI
 
@@ -52,25 +53,30 @@ def run_agent(api_key, agent_id, config_id, pdf, filename='notice.pdf', progress
     if not api_key or not agent_id.startswith('agt_'):
         raise StudioError('연결 설정에 API 키와 올바른 Agent ID를 입력해주세요.')
     started = time.monotonic()
+    phase = 'connect'
     try:
         with OpenAI(api_key=api_key, base_url='https://api.upstage.ai/v2', timeout=45, max_retries=0) as client:
             if trace and trace.get('job_id'):
+                phase = 'resume'
                 if (trace.get('agent_id'), str(trace.get('config_id'))) != (agent_id, str(config_id)):
                     raise StudioError('진행 중인 분석과 현재 에이전트 설정이 다릅니다. 기존 실행 내역을 확인해주세요.')
                 response = client.responses.retrieve(trace['job_id'], include=['all'])
                 file_id = trace['file_id']
             else:
                 if progress: progress('원본 파일을 Upstage에 전달하고 있습니다.')
-                file = client.files.create(file=(filename, pdf, mime), purpose='user_data')
+                phase = 'upload'
+                file = client.files.create(file=(filename, pdf, mime), purpose='user_data', timeout=120)
                 file_id = file.id
+                phase = 'submit'
                 response = client.responses.create(model=agent_id, include=['all'],
                     input=[{'role':'user','content':[{'type':'input_file','file_id':file_id}]}],
-                    extra_body={'config_id':config_id or '1'})
+                    extra_body={'config_id':config_id or '1'}, timeout=timeout)
                 # Save before any UI callback can interrupt the script. Reruns
                 # retrieve this same job instead of paying for another request.
                 if trace is not None:
                     trace.update(job_id=response.id,agent_id=agent_id,config_id=config_id,file_id=file_id,started_at=time.time())
             while response.status in ('queued','in_progress'):
+                phase = 'poll'
                 elapsed = time.time()-trace['started_at'] if trace and trace.get('started_at') else time.monotonic()-started
                 if elapsed > timeout:
                     raise StudioError('분석 대기 시간이 초과되었습니다. Studio 실행 내역을 먼저 확인하세요. 자동 재실행하지 않았습니다.')
@@ -89,6 +95,9 @@ def run_agent(api_key, agent_id, config_id, pdf, filename='notice.pdf', progress
         raise
     except Exception as exc:
         code = getattr(exc, 'status_code', None)
+        # Provider messages/headers may contain user data: log only fixed phase
+        # names, exception class and numeric HTTP status, never the error body.
+        logging.getLogger(__name__).warning('Studio request failed: phase=%s type=%s status=%s',phase,type(exc).__name__,code if isinstance(code,int) else None)
         if code in (401,403):
             message = 'API 키 또는 워크플로우 접근 권한을 확인해주세요.'
         elif code == 429:
