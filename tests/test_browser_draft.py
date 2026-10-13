@@ -51,3 +51,13 @@ def test_sessions_have_independent_snapshots(state):
 
 def test_empty_session_does_not_create_or_overwrite_draft():
     assert snapshot({'api_key':'secret','answer_other_facts':'empty'}) is None
+
+def test_live_notice_schema_roundtrip(state):
+    from schema_builder import notice_schema
+    notice={k:[] if spec['type']=='array' else '' for k,spec in notice_schema()['properties'].items()}
+    notice.update({k:v for k,v in state['notice'].items() if k in notice})
+    state.update(notice=notice,last_mode='실제 AI 분석')
+    restored=restore(snapshot(state))
+    assert restored['notice']['notice_title']==notice['notice_title']
+    assert restored['pdf']==state['pdf']
+    assert restored['answer_weekly_visits']==2

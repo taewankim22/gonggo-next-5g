@@ -75,12 +75,11 @@ hr{border-color:var(--line)}
 @media(prefers-reduced-motion:reduce){.story-ring,button{transition:none!important}}
 </style>''',unsafe_allow_html=True)
 
-bootstrap()
-
 # Retain inputs independently of Streamlit's cleanup for hidden widgets.
 for state_key in list(st.session_state):
     if state_key.startswith(('answer_', 'question_', 'doc_')) or state_key in ('profile_preset','schedule_state','show_later_questions'):
         st.session_state[state_key] = st.session_state[state_key]
+bootstrap()
 st.session_state.setdefault('screen', 1)
 def go(screen):
     st.session_state.screen = screen
