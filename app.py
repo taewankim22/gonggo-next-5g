@@ -308,7 +308,7 @@ if screen==3:
                 st.caption('대상 여부만 답하세요. 증빙 준비 상태는 다음 단계에서 별도로 확인합니다. 답변을 원하지 않으면 아직 모름으로 두세요.')
             else:
                 qa[question['text']]=st.text_input(question['text'],key=widget,max_chars=700,placeholder='모르면 비워두세요')
-            with st.expander('질문에 연결된 공고 조건 · '+question['condition_label']+' · '+question['id'][:4]):
+            with st.expander('질문에 연결된 공고 조건 · '+question['condition_label']):
                 st.write(question['rule'] or '연결할 조건을 자동으로 확정하지 못했습니다. 원문에서 직접 확인하세요.')
                 st.caption('추출 근거 후보 · '+(question['page'] or '미확인')+'쪽')
                 st.text(question['quote'] or '인용문 없음')
@@ -423,7 +423,7 @@ if screen==4 and 'result' in st.session_state:
     for c in cards:
         def esc(value):
             text=str(value)
-            for key,label in {'USER_ANSWERS':'내 답변','NOTICE':'공고','document_checklist':'제출물 체크리스트','question_answers':'질문별 답변','enrollment_status':'학적','other_facts':'추가 답변','review_stage':'지원 단계','unavailable_dates':'참석 불가 일정'}.items():text=text.replace(key,label)
+            for key,label in {'USER_ANSWERS':'내 답변','NOTICE':'공고','document_checklist':'제출물 체크리스트','question_answers':'질문별 답변','condition_answers':'조건별 답변','condition_id':'연결된 조건','preference_facts':'우대 대상 답변','social_support':'사회적 배려 대상 여부','deferred_questions':'이후 단계 질문','readiness':'준비 상태','applicability':'적용 대상','enrollment_status':'학적','other_facts':'추가 답변','review_stage':'지원 단계','unavailable_dates':'참석 불가 일정'}.items():text=text.replace(key,label)
             return html.escape(text)
         color={'불일치':'#f9e8df','확인 필요':'#f8f1d9','일치':'#e2efdf','해당 없음':'#edf0ed'}[c['status']]
         st.markdown(f'<div class="review-card"><span class="badge" style="background:{color}">{esc(c["status"])}</span><h3>{esc(c["title"])}</h3><p>{esc(c["reason"])}</p><p class="action">다음 행동 · {esc(c["action"])}</p></div>',unsafe_allow_html=True)
