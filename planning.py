@@ -2,6 +2,7 @@
 import re
 from core import fingerprint, normalize
 from conditions import link_question, has_social, SOCIAL_QUESTION, missing
+from source_context import locate_document, UNKNOWN
 
 PREP_STATES = ['아직 확인하지 않음', '준비 전', '준비 중', '준비 완료', '제출 완료']
 STAGES = ['지원 검토 중', '지원 준비 중', '서류 제출 전', '서류 제출 후', '면접 준비 중', '선발 후·활동 중', '활동 종료 후']
@@ -30,22 +31,11 @@ def document_items(notice, pages):
     for raw in notice.get('required_documents',[]):
         if not raw.strip() or normalize(raw) in seen:continue
         seen.add(normalize(raw))
-        stage='활동 종료 후' if re.search(r'사후|활동\s*종료|결과보고서',raw) else '선발 후·활동 중' if re.search(r'선발된|통과|중간\s*심사|최종\s*결과물|협약|선정되|후속연구',raw) else '지원 단계'
         category='선택' if '선택' in raw else '해당자만' if re.search(r'해당자|경우|희망\s*시|영리기관|대상자|채용예정',raw) else '필수' if re.search(r'필수|공통|사전서류|사후서류',raw) else '대상·필수 여부 확인'
         # Use the extracted item as-is. A composite item stays composite; no guessed split.
         name=raw.split(':',1)[-1].strip()
-        anchor=re.split(r'\(| - | 등 | 제출| 작성|를 |을 ',name)[0].strip()
-        anchor=re.sub(r'^(?:공통|필수|사전서류|사후서류)[,\s:]*','',anchor)
-        matches=[]
-        if len(normalize(anchor))>=2:
-            for number,page in enumerate(pages,1):
-                # Match across line breaks, then retain an exact surrounding source excerpt.
-                pattern=r'\s*'.join(re.escape(c) for c in normalize(anchor))
-                hit=re.search(pattern,page)
-                if hit:matches.append((number,page[max(0,hit.start()-100):min(len(page),hit.end()+170)]))
-        page,quote=matches[0] if matches else ('','')
-        items.append({'id':fingerprint(raw)[:12],'text':raw,'name':name,'category':category,'stage':stage,
-                      'source_page':str(page),'source_quote':quote,'source_found':bool(matches)})
+        items.append({'id':fingerprint(raw)[:12],'text':raw,'name':name,'category':category,
+                      **locate_document(name,raw,pages)})
     return items
 
 def later_item(item,stage):
@@ -105,11 +95,16 @@ def next_steps(notice, answers, rows, cards=None):
     def add(title,detail):actions.append({'title':title,'detail':detail})
     conflicts=[c for c in (cards or []) if c['status']=='불일치' and c.get('presence')=='명시']
     if conflicts:add('조건이 다른 항목 확인', ' / '.join(c['title']+': '+c['action'] for c in conflicts))
-    current=[r for r in rows if not r['later'] and r['applicability']!='해당 없음']
+    independent_conflicts=[r for r in answers.get('independent_conditions',[]) if r['status']=='불일치' and r['verified']]
+    if independent_conflicts and not conflicts:add('조건이 다른 항목 확인',' / '.join(r['reason'] for r in independent_conflicts)+' — 다른 질문의 미입력과 별도로 확인하세요.')
+    current=[r for r in rows if not r['later'] and r['stage']!=UNKNOWN and r['applicability']!='해당 없음']
     pending=[r['name']+(' (선택 · 제출하려는 경우)' if r['category']=='선택' else '') for r in current if r['readiness'] not in ('준비 완료','제출 완료') and r['applicability']=='해당' and r['source_found']]
     unclear=[r['name'] for r in current if r['applicability']=='아직 모름' or not r['source_found']]
+    unclear += [r['name'] for r in rows if r['stage']==UNKNOWN and not r['source_found'] and r['applicability']!='해당 없음']
     if pending:add('준비할 제출물', ' · '.join(pending)+' — 체크리스트에서 준비 상태를 갱신하세요.')
     if unclear:add('적용 대상·원문 확인', ' · '.join(unclear)+' — 원문 근거와 적용 대상을 확인하세요. 모든 사람의 필수서류라는 뜻은 아닙니다.')
+    timing=[r['name'] for r in rows if r['stage']==UNKNOWN and r['source_found'] and r['applicability']!='해당 없음']
+    if timing:add('서류 제출 시점 확인',' · '.join(timing)+' — 현재 필수 누락으로 계산하지 않았습니다. 원문의 제출 시점을 먼저 확인하세요.')
     labels={'enrollment_status':'공고 기준일의 학적','remaining_terms':'잔여학기','selected_center':'희망 활동 기관','skills':'명시된 우대 역량','weekly_visits':'활동 횟수','weekly_hours':'활동 시간','long_term':'전체 활동 기간 참여 가능 여부','unavailable_dates':'참석 일정'}
     unanswered=[labels[k] for k in question_keys(notice,answers) if k in labels and (answers.get(k) is None or answers.get(k)=='')]
     unanswered += [q for q,a in answers.get('question_answers',{}).items() if missing(a)]
@@ -128,6 +123,10 @@ def preparation_text(notice,answers,rows,actions):
     lines += ['', '제출물 체크리스트 (사용자 자기 확인이며 서류 내용 검증 아님)']
     lines += [f'- [{r["readiness"]}] {r["text"]} / {r["category"]} / {r["stage"]} / 적용: {r["applicability"]} / 원문: {r["source_page"] or "미확인"}쪽' for r in rows]
     lines += ['', '내 답변']+[f'- {q} {a or "미입력"}' for q,a in answers.get('question_answers',{}).items()]
+    lines += ['', '조건별 독립 판정 (수치·준비 상태와 AI 범주 검토는 구분)']
+    for r in answers.get('independent_conditions',[]):
+        lines += [f'- [{r["status"]}] {r["label"]} / 답변: {r["answer"] if r["answer"] is not None else "미입력"} / {r["stage"]}',
+                  '  '+r['reason'],'  근거: '+(r['page'] or '미확인')+'쪽 '+r['quote']]
     labels={'review_stage':'지원 단계','enrollment_status':'학적','remaining_terms':'잔여학기','selected_center':'활동 기관','skills':'관련 역량','weekly_visits':'주당 방문 횟수','weekly_hours':'주당 시간','long_term':'전체 활동기간 참여','unavailable_dates':'참석 불가 일정'}
     lines += [f'- {label}: {answers[key] if answers[key] is not None else "미입력"}' for key,label in labels.items() if key in answers]
     lines += ['', '지원 자격·선발 여부를 확정하지 않습니다. 원문과 최신 공지를 확인하세요.']

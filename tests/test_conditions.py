@@ -86,6 +86,8 @@ def test_subject_change_persists_and_updates_documents_in_real_app(monkeypatch):
     from browser_draft import snapshot,restore
     monkeypatch.setattr('browser_draft.bootstrap',lambda:None)
     monkeypatch.setattr('browser_draft.save_browser',lambda:None)
+    # UI behavior is independent of deployment credentials; gate behavior has its own tests.
+    monkeypatch.setattr('team_access.team_gate',lambda *args,**kwargs:(None,None))
     n,p,a=actual_case()
     at=AppTest.from_file(str(ROOT/'app.py')).run()
     original=(ROOT/'data/hyundai_jump_13.pdf').read_bytes()

@@ -163,7 +163,7 @@ def guard_review(notice, answers, raw, pages):
             if any(unanswered_value(v) and link_question(notice,q)['condition_id']=='eligibility' for q,v in answers.get('question_answers',{}).items()):
                 status,reason='확인 필요','지원 자격에 연결된 답변이 비어 있습니다.'
         if key=='documents' and status in ('일치','불일치') and 'document_checklist' in answers:
-            pending=[r for r in answers['document_checklist'] if not r.get('later') and r.get('applicability')!='해당 없음' and (r.get('readiness') not in ('준비 완료','제출 완료') or r.get('applicability')=='아직 모름' or not r.get('source_found'))]
+            pending=[r for r in answers['document_checklist'] if not r.get('later') and r.get('stage')!='시점 확인 필요' and r.get('applicability')!='해당 없음' and (r.get('readiness') not in ('준비 완료','제출 완료') or r.get('applicability')=='아직 모름' or not r.get('source_found'))]
             if pending:status,reason='확인 필요','준비 상태나 적용 대상을 확인하지 않은 제출물이 남아 있습니다. 체크리스트를 확인하세요.'
         if key=='documents' and 'document_checklist' in answers:
             invalid_na=[r for r in answers['document_checklist'] if not r.get('later') and r.get('applicability')=='해당 없음' and (r.get('category')=='필수' or (social_document(r) and social_answer(answers)!='해당 없음'))]
@@ -181,7 +181,8 @@ def guard_review(notice, answers, raw, pages):
     unlinked=[q for q in answers.get('condition_answers',[]) if q.get('condition_id')=='unlinked']
     if unlinked:
         cards.append(dict(key='unlinked',title='연결을 확인할 추가 조건',status='확인 필요',reason='어느 조건을 판단하는 질문인지 자동으로 확정하지 못했습니다: '+' / '.join(q['text'] for q in unlinked),action='질문과 원문 조건을 직접 대조하세요. 답변이 있어도 충족으로 확정하지 않습니다.',quote='',page='',verified=False,presence='미확인',rule='',supporting_quotes=[],linked_questions=unlinked))
-    return cards
+    from independent_review import condition_rows, apply_independent_checks
+    return apply_independent_checks(cards,condition_rows(notice,answers,pages))
 
 def action_list(cards):
     ordered = sorted(cards, key=lambda c: {'불일치':0, '확인 필요':1, '일치':2, '해당 없음':3}[c['status']])

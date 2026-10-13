@@ -15,6 +15,8 @@ from prepare_demo import sample_review
 from browser_draft import bootstrap, save_browser, clear_draft
 from planning import question_keys, document_items, additional_questions, checklist_snapshot, next_steps, preparation_text, PREP_STATES, STAGES
 from conditions import bind_answers, BASIC, LABELS, SOCIAL_QUESTION, social_document, social_answer, has_social
+from independent_review import condition_rows
+from source_context import UNKNOWN as UNKNOWN_STAGE
 
 ROOT=Path(__file__).parent
 load_dotenv(ROOT/'.env')
@@ -71,6 +73,9 @@ hr{border-color:var(--line)}
 [data-testid="stCaptionContainer"] p{color:#666!important}
 [data-testid="stCheckbox"] label{padding:8px 0;min-height:44px}
 .review-card,.stMarkdown{overflow-wrap:anywhere}
+.condition-row{display:grid;grid-template-columns:2fr 1.2fr 1fr;gap:12px;align-items:start;background:white;border:1px solid #e8e8e8;border-radius:12px;padding:14px;color:#252525}
+.condition-row small{display:block;color:#555;margin-top:5px}.condition-row .badge{float:none;display:inline-block}
+@media(max-width:640px){.condition-row{grid-template-columns:1fr}.condition-row small{font-size:.8rem}}
 @media(max-width:640px){.st-key-wizard_nav [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important;gap:5px!important}.st-key-wizard_nav [data-testid="stColumn"]{min-width:0!important;flex:1!important}.st-key-wizard_nav button{padding:6px!important;font-size:.75rem!important}.block-container{padding-top:3.8rem}.brandline{margin-bottom:10px;padding-bottom:12px}}
 
 @media(max-width:640px){.block-container{padding-left:1rem;padding-right:1rem}.hero-body{padding:23px 18px}.story-ring{width:54px;height:54px}.brandnote{display:none}.feed-tag{font-size:.62rem;padding:3px 8px}}
@@ -343,6 +348,7 @@ if screen==4:
         scope=st.session_state.source_hash[:12]
         st.subheader('04 / 나의 지원 준비')
         summary=st.container()
+        condition_panel=st.container()
         st.markdown('### 제출서류 체크리스트')
         st.caption('체크는 본인이 표시한 준비 상태입니다. 서류 내용·유효성·실제 접수 여부를 검증한 것이 아닙니다. 분류는 공고 추출 문구 기준이므로 원문과 함께 확인하세요.')
         states={}
@@ -370,9 +376,16 @@ if screen==4:
                     st.caption('문서에서 제출물 이름을 찾은 '+item['source_page']+'쪽 주변 구간입니다. 적용 대상·필수 여부까지 자동 검증한 것은 아닙니다.')
                     st.text(item['source_quote'])
                 else:st.warning('추출된 제출물 이름을 원문에서 자동으로 찾지 못했습니다. 원문과 운영기관 안내를 확인하세요.')
+                st.caption('제출 시점 근거 · '+(item.get('stage_page') or '미확인')+'쪽')
+                st.text(item.get('stage_quote') or '제출 시점을 확정할 근거 없음')
+                st.caption(item.get('stage_reason',''))
         from planning import later_item
         for item in items:
-            if not later_item(item,stage):draw_document(item)
+            if not later_item(item,stage) and item['stage']!=UNKNOWN_STAGE:draw_document(item)
+        uncertain_items=[i for i in items if i['stage']==UNKNOWN_STAGE]
+        if uncertain_items:
+            with st.expander(f'제출 시점 확인 필요 {len(uncertain_items)}개 — 현재 필수 누락으로 계산하지 않음'):
+                for item in uncertain_items:draw_document(item)
         later_items=[i for i in items if later_item(i,stage)]
         if later_items:
             with st.expander(f'이후 단계 제출물 {len(later_items)}개 — 지금 누락으로 계산하지 않음'):
@@ -380,11 +393,31 @@ if screen==4:
         if not items:st.info('구체적인 제출서류 목록이 추출되지 않았습니다. 서류가 필요 없다는 뜻은 아닙니다. 상세 공고를 확인하세요.')
         rows=checklist_snapshot(items,states,stage)
         a['document_checklist']=rows
+        a['independent_conditions']=condition_rows(n,a,st.session_state.pages)
         # Pass all readiness states to Studio as user assertions, never as verified documents.
         a['other_facts']+='\n제출물 준비 상태(본인 확인):\n'+'\n'.join(r['text']+' / 적용: '+r['applicability']+' / 상태: '+r['readiness']+' / 제출 단계: '+r['stage'] for r in rows)
-        current=fingerprint({'source':st.session_state.source_hash,'answers':a,'mode':mode,'review_agent':review_id,'version':review_version})
+        current=fingerprint({'logic_version':'independent-v1','source':st.session_state.source_hash,'answers':a,'mode':mode,'review_agent':review_id,'version':review_version})
         if st.session_state.get('review_hash')!=current:st.session_state.pop('result',None)
         steps=next_steps(n,a,rows,st.session_state.get('result'))
+        with condition_panel:
+            st.markdown('### 조건별 독립 판정표')
+            st.caption('한 조건의 미입력은 다른 조건의 불일치를 지우지 않습니다. 수치·명시된 학적·준비 상태를 개별 확인하며, 자유서술 답변은 입력만으로 일치 판정하지 않습니다.')
+            current_conditions=[r for r in a['independent_conditions'] if r['status']!='이후 단계']
+            order={'불일치':0,'확인 필요':1,'일치':2,'해당 없음':3}
+            def draw_condition(r):
+                color={'불일치':'#f9e8df','확인 필요':'#f8f1d9','일치':'#e2efdf','해당 없음':'#edf0ed','이후 단계':'#edf0ed'}[r['status']]
+                answer='미입력' if r['answer'] in (None,'') else str(r['answer'])
+                st.markdown('<div class="condition-row"><div><strong>'+html.escape(r['label'])+'</strong><small>'+html.escape(LABELS.get(r['category'],r['category']))+' · '+html.escape(r['stage'])+'</small></div><div>내 답변<small>'+html.escape(answer)+'</small></div><div><span class="badge" style="background:'+color+'">'+r['status']+'</span><small>'+html.escape(r['basis'])+'</small></div></div>',unsafe_allow_html=True)
+                with st.expander('판정 이유·원문 · '+r['label']):
+                    st.write(r['reason']);st.caption('근거 '+(r['page'] or '미확인')+'쪽 · '+('인용 확인' if r['verified'] else '근거 직접 확인 필요'))
+                    st.text(r['quote'] or '연결된 원문 없음')
+                    if r.get('stage_quote'):st.caption('시점 근거 '+r['stage_page']+'쪽');st.text(r['stage_quote'])
+            for r in sorted(current_conditions,key=lambda r:order.get(r['status'],4)):draw_condition(r)
+            future_conditions=[r for r in a['independent_conditions'] if r['status']=='이후 단계']
+            if future_conditions:
+                with st.expander(f'이후 단계 조건 {len(future_conditions)}개'):
+                    for r in future_conditions:draw_condition(r)
+            if not current_conditions:st.info('개별 판정을 위한 조건이 추출되지 않았습니다. 원문과 아래 AI 검토를 확인하세요.')
         with summary:
             st.markdown('### 지금 할 일')
             st.caption('준비 상태를 바꾸면 이 목록은 바로 갱신됩니다. 상세 AI 대조는 아래 버튼을 누를 때만 실행합니다.')
@@ -393,7 +426,7 @@ if screen==4:
             st.text(n.get('submission_method') or '원문 또는 운영기관에 확인')
             for i,step in enumerate(steps,1):
                 st.markdown(f'<div class="review-card"><strong>{i}. {html.escape(step["title"])}</strong><p>{html.escape(step["detail"])}</p></div>',unsafe_allow_html=True)
-        st.session_state.preparation={'answers':a,'checklist':rows,'next_actions':steps}
+        st.session_state.preparation={'answers':a,'checklist':rows,'condition_rows':a['independent_conditions'],'next_actions':steps}
         st.download_button('내 준비 목록 저장 (TXT)',preparation_text(n,a,rows,steps),'5G_공고다음_준비목록.txt','text/plain')
         st.caption('실제 AI 대조 시 답변과 체크리스트의 준비 상태를 Upstage로 전달합니다.')
         if st.button('내 조건과 대조하기',type='primary',use_container_width=True):
