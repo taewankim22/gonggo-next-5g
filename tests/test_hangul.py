@@ -17,7 +17,7 @@ def test_real_hwp_header_and_original_bytes():
 
 def test_real_hwpx_container():
     data=(FIXTURE.parent/'ai_champion_notice.hwpx').read_bytes()
-    assert inspect_input(data,'공고.hwpx')=={'mime':'application/vnd.hancom.hwpx','pages':[],'kind':'hangul'}
+    assert inspect_input(data,'공고.hwpx')=={'mime':'application/hwp+zip','pages':[],'kind':'hangul'}
 
 @pytest.mark.parametrize('data,name',[(b'broken','x.hwp'),(b'broken','x.hwpx'),(b'%PDF-1.7','x.hwp')])
 def test_reject_fake_hangul(data,name):
@@ -40,7 +40,7 @@ def make_hwpx(mime=b'application/hwp+zip',payload=b'<xml/>'):
     return out.getvalue()
 
 def test_hwpx_container_not_inferred_as_pdf_or_single_page():
-    assert inspect_input(make_hwpx(),'x.hwpx')=={'mime':'application/vnd.hancom.hwpx','pages':[],'kind':'hangul'}
+    assert inspect_input(make_hwpx(),'x.hwpx')=={'mime':'application/hwp+zip','pages':[],'kind':'hangul'}
     with pytest.raises(ValueError,match='형식'):inspect_input(make_hwpx(b'application/zip'),'x.hwpx')
 
 def test_hwpx_expansion_limit():
