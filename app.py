@@ -14,6 +14,7 @@ from input_tools import inspect_input, parse_pages, map_image_page
 from prepare_demo import sample_review
 from browser_draft import bootstrap, save_browser, clear_draft
 from planning import question_keys, document_items, additional_questions, checklist_snapshot, next_steps, preparation_text, PREP_STATES, STAGES
+from conditions import bind_answers, BASIC, LABELS, SOCIAL_QUESTION, social_document, social_answer, has_social
 
 ROOT=Path(__file__).parent
 load_dotenv(ROOT/'.env')
@@ -278,6 +279,7 @@ if screen==3:
         for key in keys:
             widget='answer_'+key
             if key=='review_stage':continue
+            st.caption('확인하는 조건 · '+LABELS[BASIC[key]])
             if key in ('remaining_terms','weekly_visits','weekly_hours'):
                 label={'remaining_terms':'공고 기준일의 잔여학기','weekly_visits':'주당 방문 가능한 횟수','weekly_hours':'주당 총 활동 가능한 시간'}[key]
                 a[key]=st.number_input(label,min_value=0,max_value=100,value=None,step=1,key=widget,placeholder='모르면 비워두세요')
@@ -296,14 +298,26 @@ if screen==3:
                 a[key]=st.text_input(label,max_chars=700,key=widget)
         questions,later_questions,covered=additional_questions(n,keys,items,stage)
         qa={}
-        for question in questions:
+        def draw_question(question):
+            st.caption('확인하는 조건 · '+question['condition_label'])
             if question.get('context'):st.caption('공고의 활동 의무: '+question['context'])
-            qa[question['text']]=st.text_input(question['text'],key='question_'+scope+'_'+question['id'],max_chars=700,placeholder='모르면 비워두세요')
+            widget='question_'+scope+'_'+question['id']
+            if question.get('kind')=='social_support':
+                value=st.selectbox(question['text'],['아직 모름','해당','해당 없음'],key=widget)
+                qa[question['text']]=None if value=='아직 모름' else value
+                st.caption('대상 여부만 답하세요. 증빙 준비 상태는 다음 단계에서 별도로 확인합니다. 답변을 원하지 않으면 아직 모름으로 두세요.')
+            else:
+                qa[question['text']]=st.text_input(question['text'],key=widget,max_chars=700,placeholder='모르면 비워두세요')
+            with st.expander('질문에 연결된 공고 조건 · '+question['condition_label']+' · '+question['id'][:4]):
+                st.write(question['rule'] or '연결할 조건을 자동으로 확정하지 못했습니다. 원문에서 직접 확인하세요.')
+                st.caption('추출 근거 후보 · '+(question['page'] or '미확인')+'쪽')
+                st.text(question['quote'] or '인용문 없음')
+        for question in questions:draw_question(question)
         if later_questions:
             with st.expander(f'선발 후·후속연구 단계의 질문 {len(later_questions)}개'):
                 st.caption('지금 답하지 않아도 됩니다. 숨긴 조건을 충족했다고 판단하지 않으며, 관련 단계에서는 다시 확인해야 합니다.')
                 if st.checkbox('이후 단계 질문에도 지금 답하기',key='show_later_questions'):
-                    for question in later_questions:qa[question['text']]=st.text_input(question['text'],key='question_'+scope+'_'+question['id'],max_chars=700,placeholder='모르면 비워두세요')
+                    for question in later_questions:draw_question(question)
                 else:
                     for question in later_questions:st.write('• '+question['text'])
         with st.expander('추가 설명 또는 질문 정리 기준 보기'):
@@ -311,6 +325,8 @@ if screen==3:
             st.caption('공고 추출값에 명시된 조건으로 기본 질문을 고릅니다. 서류 준비 질문은 아래 체크리스트로 옮겼습니다. 질문이 보이지 않는다고 해당 조건을 충족한 것은 아닙니다.')
             for q in covered:st.caption('중복 질문·허용 안내로 정리: '+q)
         a['question_answers']=qa
+        a['condition_answers']=bind_answers(n,keys,questions+later_questions,a,qa)
+        a['preference_facts']={'social_support':qa.get(SOCIAL_QUESTION)} if has_social(n) else {}
         a['deferred_questions']=[q['text'] for q in later_questions if q['text'] not in qa]
         a['other_facts']='\n'.join([q+' '+(v or '미입력') for q,v in qa.items()]+([extra] if extra else []))
         if st.session_state.get('draft_answers') != a:
@@ -336,13 +352,18 @@ if screen==4:
             # Migrate prior multi-state preparation values into a simple checkbox.
             if prefix+'_done' not in st.session_state:
                 st.session_state[prefix+'_done']=st.session_state.get(prefix+'_ready') in ('준비 완료','제출 완료')
-            applicability=st.session_state.get(prefix+'_applies','아직 모름') if item['category']!='필수' else '해당'
+            linked_social=has_social(n) and social_document(item) and item['category']!='필수'
+            applicability=(social_answer(a) or '아직 모름') if linked_social else st.session_state.get(prefix+'_applies','아직 모름') if item['category']!='필수' else '해당'
             done=st.checkbox(item['name']+' · 준비 완료',key=prefix+'_done',disabled=applicability=='해당 없음')
             st.caption(item['category']+' · '+item['stage'])
-            if item['category'] in ('해당자만','선택','대상·필수 여부 확인'):
+            if linked_social:
+                value['applicability']=applicability
+                st.caption('연결된 우대 대상 답변 · '+('확인 필요' if applicability=='아직 모름' else applicability)+' — 대상 여부는 3단계에서 수정하세요. 선택서류는 필수서류가 아닙니다.')
+            elif item['category'] in ('해당자만','선택','대상·필수 여부 확인'):
                 value['applicability']=st.selectbox('적용 대상 확인 · '+item['name'],['아직 모름','해당','해당 없음'],key=prefix+'_applies')
             else:value['applicability']='해당'
-            value['readiness']='준비 완료' if done else '준비 전'
+            value['readiness']='준비 완료' if done and applicability!='해당 없음' else '아직 확인하지 않음'
+            st.caption('준비 상태 · '+('해당 없음 (대상 아님)' if applicability=='해당 없음' else '준비 완료 (본인 확인)' if done else '확인 필요 — 체크하지 않은 상태를 준비 완료나 비대상으로 판단하지 않습니다.'))
             states[item['id']]=value
             with st.expander('근거 확인 · '+item['name']):
                 if item['source_found']:
@@ -411,6 +432,8 @@ if screen==4 and 'result' in st.session_state:
             if st.session_state.get('source_info',{}).get('kind')=='image':st.caption('단일 이미지 원본은 앱이 1페이지로 연결합니다. Agent가 추출한 페이지 번호와 구분해 저장합니다.')
             if not c['verified'] and c['quote']:st.caption('아래는 AI의 인용 후보이며, 원문의 연속 문장으로 확인되지 않았습니다.')
             st.text(c['quote'] or '인용문이 없습니다.')
+            for question in c.get('linked_questions',[]):
+                st.caption('연결된 질문 · '+question['text']+' / 답변: '+str(question.get('answer') if question.get('answer') not in (None,'') else '미입력 · 확인 필요'))
             for extra in c.get('supporting_quotes',[]):
                 st.caption('추가 원문 구간 · '+extra['page']+'페이지 · '+extra['basis']);st.text(extra['quote'])
             if c.get('model_quote_changed'):st.caption('맞춤검토가 재출력한 인용과 차이가 있어 최초 공고 추출 인용을 표시합니다.')

@@ -1,6 +1,7 @@
 """Conservative preparation UI from existing Studio fields; no invented requirements."""
 import re
 from core import fingerprint, normalize
+from conditions import link_question, has_social, SOCIAL_QUESTION, missing
 
 PREP_STATES = ['아직 확인하지 않음', '준비 전', '준비 중', '준비 완료', '제출 완료']
 STAGES = ['지원 검토 중', '지원 준비 중', '서류 제출 전', '서류 제출 후', '면접 준비 중', '선발 후·활동 중', '활동 종료 후']
@@ -58,6 +59,9 @@ def additional_questions(notice, keys, items, stage):
     for chunk in chunks:
         q=chunk.strip(' ,，');q=q if q.endswith('?') else q+'?'
         if len(q)<3:continue
+        if has_social(notice) and '사회적배려' in normalize(q):
+            covered.append(q)
+            continue
         # Duplicates are only removed when the whole question is represented elsewhere.
         compound=bool(re.search(r'지역|소재|4년제|국적|외국인|초과학기|기준일|이동|통학|언어',q))
         duplicate=(('remaining_terms' in keys and '잔여학기' in q and not compound)
@@ -76,13 +80,15 @@ def additional_questions(notice, keys, items, stage):
             # Named-center preference is handled by center + skill fields, including no selection.
             if notice.get('preference_center') and '분야' not in notice['preference_center']:covered.append(q);continue
         if duplicate or (doc_covered and not mixed):covered.append(q);continue
-        record={'id':fingerprint(q)[:12],'text':q}
+        record=link_question(notice,q)
         if stage not in ('선발 후·활동 중','활동 종료 후') and re.search(r'후속연구|협약|정부지원연구개발비|채용|결산|부도|체납|참여제한|25\.11\.30',q):later.append(record)
         else:active.append(record)
     # Preserve all omitted questions for an explicit audit/view; hidden never means satisfied.
     if notice.get('commitment_rule') and not notice.get('minimum_weekly_hours') and not notice.get('minimum_weekly_visits'):
         text='활동 의무 중 이행이 어렵거나 아직 확인하지 못한 항목이 있나요?'
-        active.append({'id':fingerprint(text)[:12],'text':text,'context':notice['commitment_rule']})
+        active.append({**link_question(notice,text,'commitment'),'context':notice['commitment_rule']})
+    if has_social(notice):
+        active.append(link_question(notice,SOCIAL_QUESTION,'preference','social_support'))
     return active,later,covered
 
 def checklist_snapshot(items, states, stage):
@@ -100,13 +106,13 @@ def next_steps(notice, answers, rows, cards=None):
     conflicts=[c for c in (cards or []) if c['status']=='불일치' and c.get('presence')=='명시']
     if conflicts:add('조건이 다른 항목 확인', ' / '.join(c['title']+': '+c['action'] for c in conflicts))
     current=[r for r in rows if not r['later'] and r['applicability']!='해당 없음']
-    pending=[r['name'] for r in current if r['readiness'] not in ('준비 완료','제출 완료') and r['applicability']=='해당' and r['source_found']]
+    pending=[r['name']+(' (선택 · 제출하려는 경우)' if r['category']=='선택' else '') for r in current if r['readiness'] not in ('준비 완료','제출 완료') and r['applicability']=='해당' and r['source_found']]
     unclear=[r['name'] for r in current if r['applicability']=='아직 모름' or not r['source_found']]
     if pending:add('준비할 제출물', ' · '.join(pending)+' — 체크리스트에서 준비 상태를 갱신하세요.')
     if unclear:add('적용 대상·원문 확인', ' · '.join(unclear)+' — 원문 근거와 적용 대상을 확인하세요. 모든 사람의 필수서류라는 뜻은 아닙니다.')
     labels={'enrollment_status':'공고 기준일의 학적','remaining_terms':'잔여학기','selected_center':'희망 활동 기관','skills':'명시된 우대 역량','weekly_visits':'활동 횟수','weekly_hours':'활동 시간','long_term':'전체 활동 기간 참여 가능 여부','unavailable_dates':'참석 일정'}
     unanswered=[labels[k] for k in question_keys(notice,answers) if k in labels and (answers.get(k) is None or answers.get(k)=='')]
-    unanswered += [q for q,a in answers.get('question_answers',{}).items() if not a.strip()]
+    unanswered += [q for q,a in answers.get('question_answers',{}).items() if missing(a)]
     if unanswered:add('아직 답하지 않은 조건', unanswered[0]+(f' 외 {len(unanswered)-1}개' if len(unanswered)>1 else '')+' — 모르면 확인 필요로 남겨두세요.')
     documents=next((c for c in (cards or []) if c['key']=='documents' and c['verified'] and c['presence']=='명시'),None)
     if documents and documents.get('action'):add('제출 전 함께 확인',documents['action'])

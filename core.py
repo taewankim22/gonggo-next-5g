@@ -73,6 +73,7 @@ def numeric(value):
 def guard_review(notice, answers, raw, pages):
     """Never promote an AI conclusion. Downgrade unverifiable claims; flag numeric conflict."""
     from planning import has_attendance
+    from conditions import missing as unanswered_value, has_social, social_card, social_answer, social_document
     cards = []
     for key, label in CATEGORIES.items():
         quote, page = notice.get(key+'_quote', ''), notice.get(key+'_page', '')
@@ -81,8 +82,12 @@ def guard_review(notice, answers, raw, pages):
         reason = raw.get(key+'_reason', '')
         action = raw.get(key+'_action', '') or '원문과 운영기관 안내를 확인해주세요.'
         supporting_quotes=[]
+        known_conflict=False
         if status not in STATUSES:
             status, reason = '확인 필요', 'AI 결과의 상태값을 해석하지 못했습니다.'
+        if status=='해당 없음':
+            status,reason='확인 필요','비적용을 확인할 답변과 조건 연결이 부족합니다. 미입력은 해당 없음으로 판단하지 않습니다.'
+            action='이 항목의 질문에 답하거나 원문에서 적용 대상을 확인하세요.'
         presence=notice.get(key+'_presence','명시' if notice.get(key+'_rule') else '미기재')
         if presence=='미기재':
             status,reason,action='확인 필요','문서에서 이 조건을 찾지 못했습니다. 비적용이나 충족을 뜻하지 않습니다.','상세 모집요강이나 운영기관에서 이 조건의 적용 여부를 확인하세요.'
@@ -93,7 +98,7 @@ def guard_review(notice, answers, raw, pages):
         if key == 'eligibility' and verified and presence=='명시':
             if (notice.get('allowed_statuses') and not answers.get('enrollment_status')) or (notice.get('minimum_remaining_terms') and answers.get('remaining_terms') is None):
                 status, reason = '확인 필요', '학적 또는 잔여학기 답변이 비어 있습니다. 지역·대학 유형 등 나머지 조건도 확인해야 합니다.'
-            if status=='일치' and notice.get('other_questions') and not answers.get('other_facts'):
+            if status=='일치' and 'condition_answers' not in answers and notice.get('other_questions') and not answers.get('other_facts'):
                 status,reason='확인 필요','공고의 추가 지원 조건에 대한 답변이 없습니다. '+notice['other_questions']
             if status=='일치' and notice.get('minimum_remaining_terms') and '잔여학기' not in normalize(quote):
                 status,reason='확인 필요','잔여학기 판단을 뒷받침하는 인용이 부족합니다. 모집대상 각주를 확인하세요.'
@@ -129,11 +134,13 @@ def guard_review(notice, answers, raw, pages):
                 elif required is not None and actual < required:
                     conflicts.append(f'{name}: 내 답변 {actual:g}, 공고의 추출값 {required:g}')
             if conflicts:
+                known_conflict=True
                 status, reason = '불일치', ' / '.join(conflicts) + '. 추출값은 원문에서 다시 확인해주세요.'
                 action = '시간 합계와 별개로 필요한 방문 횟수를 확보할 수 있는지 확인하세요.'
             elif missing:
                 status, reason = '확인 필요', ', '.join(missing) + ' 답변이 비어 있습니다.'
             if notice.get('activity_period') and answers.get('long_term')=='어려움':
+                known_conflict=True
                 status,reason='불일치','공고의 전체 활동 기간 참여가 어렵다고 답했습니다: '+notice['activity_period']
             elif notice.get('activity_period') and not answers.get('long_term') and status=='일치':
                 status,reason='확인 필요','전체 활동 기간 참여 가능 여부가 입력되지 않았습니다.'
@@ -144,15 +151,36 @@ def guard_review(notice, answers, raw, pages):
         if key=='schedule' and 'question_answers' in answers and not has_attendance(notice) and presence=='명시' and status!='불일치':
             label='접수·발표 일정'
             status,reason,action='확인 필요','추출된 일정에서 참석 일정이 확인되지 않아 개인 참석 가능 시간은 묻지 않았습니다. 접수·발표 날짜와 변경 공지는 원문에서 확인하세요.','접수 마감과 제출 경로를 확인하고 제출할 시점을 정하세요.'
-        if key=='eligibility' and status=='일치' and any(not v.strip() for v in answers.get('question_answers',{}).values()):
-            status,reason='확인 필요','아직 답하지 않은 공고 조건이 있습니다. 빈 답변을 충족으로 판단하지 않습니다.'
-        if key=='documents' and status=='일치' and 'document_checklist' in answers:
+        if 'condition_answers' in answers:
+            linked=[q for q in answers['condition_answers'] if q.get('condition_id')==key and q.get('kind')!='social_support']
+            unanswered=[q for q in linked if unanswered_value(q.get('answer'))]
+            # Center-specific preference may be explicitly out of scope; do not re-open its hidden skills question.
+            if unanswered and status in ('일치','불일치') and not known_conflict:
+                status,reason='확인 필요','이 조건에 연결된 답변이 비어 있습니다: '+', '.join(q['text'] for q in unanswered)+'. 다른 조건의 빈 답변과 구분합니다.'
+                action='이 조건의 미입력 질문을 확인하세요. 답변이 없다는 이유로 충족·미충족을 확정하지 않습니다.'
+        elif key=='eligibility' and status=='일치':
+            from conditions import link_question
+            if any(unanswered_value(v) and link_question(notice,q)['condition_id']=='eligibility' for q,v in answers.get('question_answers',{}).items()):
+                status,reason='확인 필요','지원 자격에 연결된 답변이 비어 있습니다.'
+        if key=='documents' and status in ('일치','불일치') and 'document_checklist' in answers:
             pending=[r for r in answers['document_checklist'] if not r.get('later') and r.get('applicability')!='해당 없음' and (r.get('readiness') not in ('준비 완료','제출 완료') or r.get('applicability')=='아직 모름' or not r.get('source_found'))]
             if pending:status,reason='확인 필요','준비 상태나 적용 대상을 확인하지 않은 제출물이 남아 있습니다. 체크리스트를 확인하세요.'
+        if key=='documents' and 'document_checklist' in answers:
+            invalid_na=[r for r in answers['document_checklist'] if not r.get('later') and r.get('applicability')=='해당 없음' and (r.get('category')=='필수' or (social_document(r) and social_answer(answers)!='해당 없음'))]
+            if invalid_na:status,reason='확인 필요','필수서류 또는 대상 여부가 확인되지 않은 증빙을 해당 없음으로 처리할 수 없습니다.'
         cards.append(dict(key=key, title=label, status=status, reason=reason, action=action,
                           quote=quote, page=page, verified=verified, presence=presence, rule=notice.get(key+'_rule',''),
                           model_status=raw.get(key+'_status'), model_quote_changed=raw.get(key+'_quote','')!=quote))
         cards[-1]['supporting_quotes']=supporting_quotes
+        cards[-1]['linked_questions']=[q for q in answers.get('condition_answers',[]) if q.get('condition_id')==key]
+    if has_social(notice):cards.append(social_card(notice,answers,pages))
+    extra_preferences=[q for q in answers.get('condition_answers',[]) if q.get('condition_id')=='preference' and q.get('kind')!='social_support' and q.get('answer_key','').startswith('question_answers.')]
+    if notice.get('preference_center') and extra_preferences:
+        quote,page=notice.get('preference_quote',''),notice.get('preference_page','')
+        cards.append(dict(key='other_preference',title='그 밖의 우대 조건',status='확인 필요',reason='기관별 우대의 해당 없음과 별도로 확인합니다. '+' / '.join(q['text']+' 답변: '+('미입력' if unanswered_value(q.get('answer')) else str(q['answer'])) for q in extra_preferences),action='희망 기관이 인정하는 전공·역량 범위를 원문 또는 운영기관에서 확인하세요.',quote=quote,page=page,verified=evidence(quote,page,pages),presence=notice.get('preference_presence','명시'),rule=notice.get('preference_rule',''),supporting_quotes=[],linked_questions=extra_preferences))
+    unlinked=[q for q in answers.get('condition_answers',[]) if q.get('condition_id')=='unlinked']
+    if unlinked:
+        cards.append(dict(key='unlinked',title='연결을 확인할 추가 조건',status='확인 필요',reason='어느 조건을 판단하는 질문인지 자동으로 확정하지 못했습니다: '+' / '.join(q['text'] for q in unlinked),action='질문과 원문 조건을 직접 대조하세요. 답변이 있어도 충족으로 확정하지 않습니다.',quote='',page='',verified=False,presence='미확인',rule='',supporting_quotes=[],linked_questions=unlinked))
     return cards
 
 def action_list(cards):
