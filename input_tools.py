@@ -38,8 +38,7 @@ def inspect_hangul(data, ext):
                     raise ValueError('손상된 HWPX 파일입니다.')
         except (zipfile.BadZipFile, KeyError, RuntimeError, NotImplementedError):
             raise ValueError('손상되었거나 지원하지 않는 HWPX입니다. 한글에서 PDF로 저장해 올려주세요.') from None
-        # Use the MIME declared by the HWPX package itself. Upstage's Files API
-        # rejects application/vnd.hancom.hwpx with HTTP 500 for valid inputs.
+        # Use the MIME declared by the validated HWPX package itself.
         mime = 'application/hwp+zip'
     # Local text/sections are not page evidence. Only the provider's Parse pages are used.
     return {'mime':mime, 'pages':[], 'kind':'hangul'}

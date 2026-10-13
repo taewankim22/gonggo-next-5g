@@ -19,6 +19,9 @@ def test_completed_job_is_retrieved_after_ui_interrupt_without_resubmission(monk
         files=SimpleNamespace(create=upload)
         responses=SimpleNamespace(create=submit,retrieve=retrieve)
         def __init__(self,**kwargs):pass
+        def with_options(self,**kwargs):
+            assert kwargs=={'max_retries':2}
+            return self
         def __enter__(self):return self
         def __exit__(self,*args):pass
     monkeypatch.setattr(client,'OpenAI',Connection)

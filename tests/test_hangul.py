@@ -56,6 +56,7 @@ def test_agent_receives_original_hwp_mime_and_parse_trace(monkeypatch):
             self.responses=SimpleNamespace(create=self.response)
         def __enter__(self):return self
         def __exit__(self,*args):pass
+        def with_options(self,**kwargs):return self
         def upload(self,**kwargs):calls['upload']=kwargs;return SimpleNamespace(id='file-test')
         def response(self,**kwargs):
             calls['request']=kwargs

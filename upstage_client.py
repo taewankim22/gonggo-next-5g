@@ -65,7 +65,9 @@ def run_agent(api_key, agent_id, config_id, pdf, filename='notice.pdf', progress
             else:
                 if progress: progress('원본 파일을 Upstage에 전달하고 있습니다.')
                 phase = 'upload'
-                file = client.files.create(file=(filename, pdf, mime), purpose='user_data', timeout=120)
+                # Upload retry does not start an agent run. Keep submission
+                # retries disabled so an ambiguous response cannot double-run it.
+                file = client.with_options(max_retries=2).files.create(file=(filename, pdf, mime), purpose='user_data', timeout=120)
                 file_id = file.id
                 phase = 'submit'
                 response = client.responses.create(model=agent_id, include=['all'],
