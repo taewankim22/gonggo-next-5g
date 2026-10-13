@@ -51,6 +51,9 @@ def seed_basic(state,notice,profile):
             m=re.search(r'(20\d{2})년\s*(\d{1,2})월\s*기준',notice.get('eligibility_rule',''))
             if m:period=f'{m[1]}-{int(m[2]):02d}'
         value,origin=profile_fact(profile,key,period)
+        if key=='remaining_terms' and value is not None:
+            try:value=int(value) if float(value).is_integer() and 0<=float(value)<=100 else None
+            except (TypeError,ValueError):value=None
         if value is not None:
             state[widget]=value;seeded[key]=value;provenance[key]=origin
         elif prior is not None:

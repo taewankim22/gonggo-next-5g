@@ -99,3 +99,18 @@ def test_public_cache_requires_exact_file_and_configuration():
     assert cached_public(ROOT,row['sha256'],'agt_bmPkaZ9TyocTVn7Nw4BEbh','7')
     assert cached_public(ROOT,row['sha256'],'agt_bmPkaZ9TyocTVn7Nw4BEbh','4') is None
     assert cached_public(ROOT,'changed-content','agt_bmPkaZ9TyocTVn7Nw4BEbh','7') is None
+
+def test_profile_first_numeric_fact_reaches_real_question_and_review(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    from catalog import load_catalog
+    monkeypatch.setattr('browser_draft.bootstrap',lambda:None)
+    monkeypatch.setattr('browser_draft.save_browser',lambda:None)
+    monkeypatch.setattr('team_access.team_gate',lambda *args,**kwargs:(None,None))
+    state=available_record(ROOT,load_catalog(ROOT)[0]);assert state
+    at=AppTest.from_file(str(ROOT/'app.py')).run()
+    for key,value in state.items():at.session_state[key]=value
+    at.session_state.common_profile={'remaining_terms':fact(1.0,'2026-03')}
+    at.session_state.screen=3;at.session_state.route='review';at.run()
+    assert not at.exception and at.number_input(key='answer_remaining_terms').value==1
+    at.button(key='nav_4').click().run()
+    assert not at.exception and any(r['status']=='불일치' for r in at.session_state['preparation']['condition_rows'])

@@ -17,7 +17,8 @@ def fact_input(key,label,initial,prefix):
         value=st.selectbox(label,options,index=options.index(initial) if initial in options else 0,key=prefix)
         return None if value=='모름' else value
     if key in NUMERIC:
-        return st.number_input(label,min_value=0.0,max_value=120.0,value=float(initial) if initial is not None else None,step=0.1 if key=='gpa' else 1.0,key=prefix)
+        if key=='gpa':return st.number_input(label,min_value=0.0,max_value=100.0,value=float(initial) if initial is not None else None,step=0.1,key=prefix)
+        return st.number_input(label,min_value=0,max_value=120,value=int(initial) if initial is not None else None,step=1,key=prefix)
     return st.text_input(label,value=str(initial or ''),key=prefix,max_chars=200) or None
 
 def render_profile():
