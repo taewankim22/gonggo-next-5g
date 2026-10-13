@@ -1,0 +1,125 @@
+공고다음 프로필·공고 탐색 검증 기록
+기준: 2026-10-13 / 공개 공고와 가상 프로필만 사용
+자동 테스트: 개발 111/111, 배포 저장소 111/111 (같은 검사를 두 환경에서 실행, 독립 222개 사례 아님)
+공고 5 × 프로필 3 = 부분 조건 15/15 통과. 전체 추출 정확도가 아님.
+14개 경계 범주: 12 통과 / 2 부분 검증 / 0 실패. 부분 검증은 통과로 합산하지 않음.
+5문서 신규 분석 및 배포 맞춤검토 1회 성공. 15조건 대조는 로컬 코드로 수행. 기존 HWPX·우대 회귀는 기존 실제 추출 기록 재생이며 새 호출 아님.
+
+1. 현대점프스쿨 PDF / 2
+원문 조건: 4년제 재학·잔여학기 2 이상 / 사회적 배려 우대
+가상 답변: 재학·3학기·지역 답변 있음 / 우대 미입력
+기대: 필수 조건과 우대 미확인 분리
+실제: 기존 실제 추출 재생 검사에서 eligibility 일치, social_preference 확인 필요
+결과: pass / 사용자 영향: 우대 미입력으로 자격 전체를 누락 처리하지 않음
+증거: tests/test_conditions.py::test_optional_unknown_does_not_contaminate_eligibility
+
+2. 현대점프스쿨 PDF / 2
+원문 조건: 2026년 3월 기준 잔여학기 2학기 이상
+가상 답변: 1학기 / 지역 미입력
+기대: 불일치와 확인 필요 동시 유지
+실제: 신규 배포 AI 호출 후에도 잔여학기 불일치, 지역 확인 필요
+결과: pass / 사용자 영향: 명확한 불일치 소실 방지
+증거: deployed_review.actual.json; deployed_evidence.png; tests/test_independent_review.py
+
+3. 현대점프스쿨 PDF / 2 및 제출 안내
+원문 조건: 사회적 배려 우대 및 해당 서류
+가상 답변: 대상 해당 / 증빙 아직 확인하지 않음
+기대: 대상과 준비 상태 분리
+실제: 기존 실제 추출 재생·앱 테스트에서 대상 해당, 준비 확인 필요
+결과: pass / 사용자 영향: 대상자가 서류를 준비했다고 오인하지 않음
+증거: tests/test_conditions.py::test_social_subject_separate_from_unready_evidence
+
+4. 현대점프스쿨 PDF / 기관별 우대 안내
+원문 조건: 여명학교 등 기관별 우대
+가상 답변: 다른 기관 선택 / 사회적 배려 모름
+기대: 기관 우대만 비적용
+실제: preference 해당 없음, social_preference 확인 필요
+결과: pass / 사용자 영향: 한 기관 비적용으로 다른 우대를 지우지 않음
+증거: tests/test_conditions.py::test_social_subject_separate_from_unready_evidence
+
+5. 현대점프스쿨 PDF / 제출 안내
+원문 조건: 사회적 배려 대상자 증빙은 해당자 선택
+가상 답변: 미준비 / 대상 미확인
+기대: 선택서류를 필수 누락으로 확대하지 않음
+실제: 배포 UI에서 선택 표시 및 대상 확인 안내
+결과: pass / 사용자 영향: 모든 지원자에게 불필요한 서류 요구 방지
+증거: tests/test_conditions.py; deployed_review.actual.json
+
+6. 공모전 프로그램 장학금 HWP / AI Champion HWPX / HWP 1쪽 / HWPX 후속연구 절
+원문 조건: 결과보고서·후속연구 증빙은 이후 제출
+가상 답변: 지원 준비 중 / 모두 미체크
+기대: 현재 목록과 이후 단계 분리
+실제: HWP UI 현재 4·이후 1, HWPX 실제 추출 재생 현재 1·이후 10
+결과: pass / 사용자 영향: 후속연구 증빙을 현재 필수 누락으로 안내하지 않음
+증거: tests/test_independent_review.py::test_actual_hwpx_current_list_excludes_future_evidence
+
+7. 현대점프스쿨 PDF / 2
+원문 조건: 2026년 3월 기준 잔여학기
+가상 답변: 프로필 기준 2026-10 / 3학기
+기대: 기준 시점 확인 필요
+실제: 2026-03 조건에 프로필 값 미적용
+결과: pass / 사용자 영향: 현재 학기를 과거 기준으로 오판하지 않음
+증거: tests/test_profile_discovery.py::test_time_mismatch_does_not_convert_current_facts_to_historical
+
+8. K-원전 HWP 및 성적 경계 검사 / 3 / 가상 경계 조건
+원문 조건: 직전 정규학기 백분위 70점 이상·12학점 이상 / 복합 OR
+가상 답변: 85점·2026-1학기, 또는 4.3 만점 답변
+기대: 기준·범위 불명은 확인 필요
+실제: 새 공식 HWP 3프로필 확인 필요; 만점 불일치·OR 검사도 확인 필요
+결과: pass / 사용자 영향: 임의 환산 및 단일 조건으로 전체 탈락 판정 방지
+증거: matrix.json notice5; tests/test_profile_discovery.py::test_ambiguous_gpa_scale_or_or_condition_cannot_reject
+
+9. 현대점프스쿨 PDF → 프로그램 장학금 HWP → PDF / 각 제출 안내
+원문 조건: 동일 명칭 서류도 공고별 준비
+가상 답변: A 성적증명서 체크, B 새 공고
+기대: B 미체크 / A 복귀 시 체크 복원
+실제: 로컬 실제 브라우저 A→B→A 확인, 배포 전환 별도 확인
+결과: pass / 사용자 영향: 다른 공고의 준비 완료 오인 방지
+증거: tests/test_profile_discovery.py::test_a_b_a_checklists_and_answers_do_not_mix
+
+10. 현대점프스쿨 PDF / 2
+원문 조건: 잔여학기 2 이상
+가상 답변: 프로필 3 / 공고 직접 1 또는 모름
+기대: 직접 답변 우선 / 모름도 유지
+실제: 1 불일치, 명시적 모름은 프로필 3으로 채우지 않음
+결과: pass / 사용자 영향: 이번 공고에서 답한 내용을 과거 정보가 덮어쓰지 않음
+증거: tests/test_profile_discovery.py::test_explicit_unknown_blocks_profile_and_explicit_value_wins
+
+11. 프로필 및 원문 버전 / 시스템 동작
+원문 조건: 결과는 적용 답변·원문 버전에 종속
+가상 답변: 프로필 수정 / 문서 바이트 또는 설정 변경
+기대: 이전 AI 결과 숨김 / 캐시 미적중
+실제: 프로필 변경 후 result 제거, 원문·설정 다르면 public cache 미사용
+결과: pass / 사용자 영향: 오래된 검토를 최신 결과로 제시하지 않음
+증거: tests/test_profile_discovery.py::test_profile_edit_invalidates_derived_results_not_explicit_answers; test_public_cache_requires_exact_file_and_configuration
+
+12. 세종대학교 공식 장학 게시판 / 초기 카탈로그 / 게시글 및 첨부
+원문 조건: 같은 URL 후보·마감일·원문 상태
+가상 답변: 중복 링크 / 2026-01-26 마감 / failed
+기대: 중복 제거·과거 사례·분석 미완료 분리
+실제: 후보 10·상세 3·첨부 1; 반복 수집 해시 확인, 실패 fixture는 추천 제외
+결과: pass / 사용자 영향: 수집 실패를 추천 0건으로 오인하지 않음
+증거: collected/collection.json; tests/test_profile_discovery.py
+
+13. 브라우저 저장 및 화면 / 해당 없음
+원문 조건: 새로고침·여러 탭·390px 화면
+가상 답변: 동일 브라우저 두 탭의 가상 체크 변경
+기대: 복원·충돌 보호·모바일 가로 넘침 없음
+실제: 복원과 저장 충돌 경고 확인. 화면 폭 도구가 390px로 적용되지 않아 모바일 미검증
+결과: partial / 사용자 영향: 모바일 가독성·터치 동선 추가 확인 필요
+증거: browser_draft.js; deployed_profile.png; browser_multitab.txt
+
+14. 사용자 격리 / 해당 없음
+원문 조건: 개인 정보는 공용 목록에 저장하지 않음
+가상 답변: 분리한 가상 세션 A·B
+기대: 프로필·답변 혼입 없음
+실제: 독립 스냅샷·비밀 제외 테스트 통과. 별도 사용자 브라우저·기기 동시 검증은 미실시
+결과: partial / 사용자 영향: 실제 다중 사용자 격리의 추가 검증 필요
+증거: tests/test_profile_discovery.py::test_sessions_not_shared_and_no_profile_in_public_catalog; tests/test_browser_draft.py
+
+남은 범위
+현재 목록 5개는 검증 후 수동 배포한 공개 카탈로그
+공식 게시판 수집기는 별도 실행 가능하지만 정기 실행 및 자동 목록 게시는 미연결
+390px 모바일 및 독립 사용자 기기 검증 미실시
+전체 추출 정확도·실제 사용자 시간 절감 미측정
+HTML 전체 해시는 조회수 같은 동적 요소에도 바뀔 수 있어 내용 변경으로 확정하지 않음

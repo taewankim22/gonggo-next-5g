@@ -314,7 +314,9 @@ if screen==3:
             else:
                 label={'selected_center':'희망 활동 기관','skills':'명시된 우대와 관련된 내 역량'}[key]
                 a[key]=st.text_input(label,max_chars=700,key=widget)
-        for key,origin in st.session_state.get('profile_provenance',{}).items():st.caption('적용한 '+key+' · '+origin)
+        for key,origin in st.session_state.get('profile_provenance',{}).items():
+            label={'enrollment_status':'학적','remaining_terms':'잔여학기','social_support':'사회적 배려 대상'}.get(key,'저장 정보')
+            st.caption('적용한 '+label+' · '+origin)
         a['profile_facts']=render_fact_overrides(n,a)
         a['answer_provenance']=st.session_state.get('profile_provenance',{})
         a['profile_revision']=fingerprint(st.session_state.get('common_profile',{}))

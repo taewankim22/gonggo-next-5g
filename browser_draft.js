@@ -11,7 +11,7 @@ function openDB() {
     req.onerror = () => reject(req.error);
   });
 }
-async function transaction(op, payload, revision) {
+async function transaction(op, payload, revision, digest) {
   const db = await openDB();
   try {
     return await new Promise((resolve, reject) => {
@@ -23,13 +23,14 @@ async function transaction(op, payload, revision) {
         const existing=req.result;
         const current=existing?._revision || 0;
         if(op==='load'){result={payload:existing || null,revision:current};return;}
+        if(op==='save' && existing?._digest===digest){result={status:'saved',revision:current};return;}
         if(current !== (revision || 0)){result={status:'conflict',revision:current};return;}
         if(op==='delete'){
           store.delete('current');store.delete('legacy-v1-backup');
           result={status:'deleted',revision:0};return;
         }
         if(existing?.version===1)store.put(existing,'legacy-v1-backup');
-        store.put({...payload,_revision:current+1},'current');
+        store.put({...payload,_revision:current+1,_digest:digest},'current');
         result={status:'saved',revision:current+1};
       };
       tx.oncomplete = () => resolve(result);
@@ -48,7 +49,7 @@ export default function(component) {
   }
   label.textContent=data.op === 'load' ? '저장한 내용 확인 중…' : '이 브라우저에 저장 중…';
   processed.set(key,{signature,message:label.textContent});
-  queue=queue.then(()=>transaction(data.op,data.payload,knownRevision ?? data.revision)).then(value=>{
+  queue=queue.then(()=>transaction(data.op,data.payload,knownRevision ?? data.revision,data.digest)).then(value=>{
     if(value?.status!=='conflict' && value?.revision!==undefined) knownRevision=value.revision;
     const message=value?.status==='conflict' ? '다른 탭의 변경을 보호하기 위해 저장을 중지했습니다.' : data.op === 'save' ? '이 브라우저에 저장 완료 · API 키 제외'
       : data.op === 'delete' ? '저장한 준비 내용을 삭제했습니다.' : '';
