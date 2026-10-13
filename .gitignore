@@ -1,0 +1,9 @@
+.venv/
+.env
+.streamlit/secrets.toml
+__pycache__/
+.pytest_cache/
+verification/
+runtime/
+*.log
+*.zip
