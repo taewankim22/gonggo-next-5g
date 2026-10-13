@@ -50,6 +50,34 @@ def test_real_hwpx_duplicate_conditions_can_reach_preparation_without_widget_col
     certificate=next(r for r in rows if '전문사업연구자' in r['text'])
     assert certificate['later']
 
+
+def test_condition_filter_is_display_only_and_sidebar_navigation_preserves_answers():
+    from unittest.mock import patch
+    from ui_components import required_progress
+    at=AppTest.from_file(str(Path(__file__).parents[1]/'app.py')).run()
+    at.session_state.route='review';at.run()
+    at.radio[0].set_value('예시 화면 체험').run()
+    next(b for b in at.button if b.label=='예시 공고 살펴보기').click().run()
+    at.button(key='nav_3').click().run()
+    at.selectbox(key='profile_preset').select('가상 B · 다른 기관 / 주 1회').run()
+    at.button(key='nav_4').click().run()
+    original=at.session_state.preparation['condition_rows']
+    assert any(r['status']=='불일치' for r in original)
+    with patch('upstage_client.run_agent',side_effect=AssertionError('UI must not call API')):
+        filter_key='condition_filter_'+at.session_state.source_hash[:12]
+        at.session_state[filter_key]='일치';at.run()
+        assert at.session_state.preparation['condition_rows']==original
+        doc=next(c for c in at.checkbox if str(c.key).endswith('_done'))
+        key=doc.key;doc.check().run()
+        assert required_progress(at.session_state.preparation['checklist'])[0]==1
+        at.button(key='entry_home').click().run()
+        at.button(key='entry_review').click().run()
+        assert at.checkbox(key=key).value
+        at.button(key='nav_3').click().run()
+        assert at.number_input(key='answer_weekly_visits').value==1
+        assert not any('확인하는 조건' in c.value or '적용한 ' in c.value for c in at.caption)
+        assert not at.exception
+
 def test_preset_survives_rerun_and_answer_change_invalidates_result():
     at=AppTest.from_file(str(Path(__file__).parents[1]/'app.py')).run()
     at.session_state.route='review'

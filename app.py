@@ -18,72 +18,15 @@ from conditions import bind_answers, BASIC, LABELS, SOCIAL_QUESTION, social_docu
 from independent_review import condition_rows
 from source_context import UNKNOWN as UNKNOWN_STAGE
 from workspaces import checkpoint, clear_active, seed_basic, explicit_basic
-from profile_ui import entry, render_fact_overrides
+from profile_ui import entry, render_fact_overrides, navigation
+from ui_components import render_preparation_summary, render_conditions, status_badge
 from profiles import applied_facts, RULE_VERSION
 
 ROOT=Path(__file__).parent
 load_dotenv(ROOT/'.env')
-st.set_page_config(page_title='공고다음 · 5G',page_icon='✨',layout='wide')
-st.markdown('''<style>
-:root{--ink:#171717;--muted:#666;--line:#e8e8e8;--pink:#c92873;--insta:linear-gradient(120deg,#f6a13a 0%,#e33c68 42%,#bb2d9a 70%,#6c42ce 100%)}
-.stApp{background:#fafafa;color:var(--ink)}
-.block-container{max-width:980px;padding-top:4.5rem;padding-bottom:4rem}
-header[data-testid="stHeader"]{background:#fafafaf0;border-bottom:1px solid var(--line)}
-[data-testid="stSidebar"]{background:white;border-right:1px solid var(--line)}
-h1,h2,h3{color:var(--ink);letter-spacing:-.055em}
-h1{font-size:clamp(1.8rem,3.5vw,2.65rem)!important;line-height:1.3!important;font-weight:800!important}
-h3{font-size:1.28rem!important;margin-top:1rem!important}
-p,label{line-height:1.65}
-a{color:#8430ac}
-a:focus-visible,button:focus-visible{outline:3px solid #8430ac!important;outline-offset:4px}
-.brandline{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 0 20px;margin-bottom:22px;border-bottom:1px solid var(--line)}
-.brandword{font-size:1.45rem;font-weight:850;letter-spacing:-.08em;color:#161616}
-.brandword span{display:block;font-size:.68rem;font-weight:600;letter-spacing:.11em;color:#666;margin-top:2px}
-.brandnote{font-size:.75rem;color:#666;white-space:nowrap}
-.story-nav{display:flex;justify-content:space-between;gap:12px;max-width:440px;margin:0 auto 26px}
-.story-nav a{text-decoration:none;color:#333;text-align:center;font-size:.75rem;font-weight:650;min-width:58px}
-.story-ring{display:grid;place-items:center;width:64px;height:64px;padding:3px;margin:0 auto 8px;border-radius:50%;background:var(--insta);transition:transform .15s ease}
-.story-ring span{display:grid;place-items:center;width:100%;height:100%;border:3px solid white;border-radius:50%;background:#fff5f9;color:#9a235c;font-size:1rem;font-weight:800}
-.story-nav a:hover .story-ring{transform:translateY(-3px)}
-.hero{background:white;border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:1.4rem}
-.feed-header{display:flex;align-items:center;gap:10px;padding:15px 20px;border-bottom:1px solid #f0f0f0}
-.avatar{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--insta);color:white;font-weight:850;font-size:.8rem;flex-shrink:0}
-.feed-name{font-size:.85rem;font-weight:750;color:#171717}.feed-name small{display:block;font-size:.7rem;color:#777;font-weight:400;margin-top:1px}
-.feed-tag{margin-left:auto;border:1px solid #eeddea;color:#9d347c;border-radius:20px;padding:4px 10px;font-size:.68rem;font-weight:700;white-space:nowrap}
-.hero-body{padding:28px 26px 24px;background:linear-gradient(135deg,#fff7ec 0%,#fff3f7 50%,#f8f3ff 100%)}
-.hero-body p{font-size:.94rem;color:#57505a;margin:14px 0 0;line-height:1.75}
-.feed-footer{padding:12px 20px;color:#666;font-size:.76rem}.feed-footer b{color:#b12d77;font-weight:650}
-.steps{color:#777;font-size:.8rem;margin-bottom:1.4rem}
-[data-testid="stFileUploader"]{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px}
-[data-testid="stFileUploaderDropzone"]{background:#fff8fb;border:1px dashed #d7adc5;border-radius:12px}
-[data-testid="stTextInput"] input,[data-testid="stNumberInput"] input{background:#fafafa!important;color:#171717!important}
-[data-baseweb="select"]>div{background:#fff!important;border-color:#ddd!important;border-radius:10px!important;color:#171717!important}
-[data-testid="stButton"] button,[data-testid="stDownloadButton"] button{border-radius:11px;transition:filter .15s ease;font-weight:650}
-button[kind="primary"],[data-testid="stBaseButton-primary"]{background:linear-gradient(110deg,#c52a63,#a32b9c,#6940c9)!important;border:0!important;color:white!important;min-height:46px}
-button[kind="primary"]:hover{filter:brightness(.94)}
-button[kind="secondary"],[data-testid="stBaseButton-secondary"]{background:white;border-color:#dedede;color:#272727}
-[data-testid="stExpander"]{background:white;border:1px solid var(--line);border-radius:12px}
-[data-testid="stCaptionContainer"]{color:#6a6a6a}
-.review-card{background:white;border:1px solid var(--line);border-radius:16px;padding:1.3rem;margin:.7rem 0;box-shadow:0 3px 14px #24112a05}
-.badge{padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:700;float:right;color:#353035}
-.review-card h3{font-size:1.08rem!important;margin:0 0 .8rem!important}.review-card p{line-height:1.75;font-size:.94rem;margin:.5rem 0}
-.action{border-top:1px solid #f0e8ef;padding-top:.8rem;color:#98265f}.small{font-size:.78rem;color:#777}
-[data-testid="stMetric"]{background:white;border:1px solid var(--line);border-radius:14px;padding:12px}
-[data-testid="stMetricValue"]{color:#a42b75}
-hr{border-color:var(--line)}
-.st-key-wizard_nav button{min-height:48px;font-size:.85rem}
-.st-key-wizard_nav button *{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;font-size:inherit!important}
-[data-testid="stCaptionContainer"] p{color:#666!important}
-[data-testid="stCheckbox"] label{padding:8px 0;min-height:44px}
-.review-card,.stMarkdown{overflow-wrap:anywhere}
-.condition-row{display:grid;grid-template-columns:2fr 1.2fr 1fr;gap:12px;align-items:start;background:white;border:1px solid #e8e8e8;border-radius:12px;padding:14px;color:#252525}
-.condition-row small{display:block;color:#555;margin-top:5px}.condition-row .badge{float:none;display:inline-block}
-@media(max-width:640px){.condition-row{grid-template-columns:1fr}.condition-row small{font-size:.8rem}}
-@media(max-width:640px){.st-key-wizard_nav [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important;gap:5px!important}.st-key-wizard_nav [data-testid="stColumn"]{min-width:0!important;flex:1!important}.st-key-wizard_nav button{padding:6px!important;font-size:.75rem!important}.block-container{padding-top:3.8rem}.brandline{margin-bottom:10px;padding-bottom:12px}}
-
-@media(max-width:640px){.block-container{padding-left:1rem;padding-right:1rem}.hero-body{padding:23px 18px}.story-ring{width:54px;height:54px}.brandnote{display:none}.feed-tag{font-size:.62rem;padding:3px 8px}}
-@media(prefers-reduced-motion:reduce){.story-ring,button{transition:none!important}}
-</style>''',unsafe_allow_html=True)
+st.set_page_config(page_title='공고다음 · 5G',page_icon='✨',layout='wide',initial_sidebar_state='collapsed')
+st.html('<style>'+(ROOT/'ui.css').read_text(encoding='utf-8')+'</style>')
+st.markdown('<div class="brandline"><div class="brandword">공고다음<span>YOUR NEXT OPPORTUNITY</span></div></div>',unsafe_allow_html=True)
 
 settings=json.loads((ROOT/'settings.json').read_text(encoding='utf-8')) if (ROOT/'settings.json').exists() else {}
 team,team_ledger=team_gate(ROOT,required=settings.get('team_required',False),password_required=settings.get('team_password_required',True))
@@ -111,9 +54,10 @@ def clear_answers():
         if key.startswith(('answer_', 'question_', 'doc_')) or key in ('profile_preset','schedule_state','show_later_questions','draft_answers','preparation','result','review_hash','profile','raw_review'):
             st.session_state.pop(key, None)
 
-st.markdown('<div class="brandline"><div class="brandword">공고다음<span>YOUR NEXT OPPORTUNITY</span></div><div class="brandnote">나에게 맞는 기회, 준비하는 방법.</div></div>',unsafe_allow_html=True)
+with st.sidebar:
+    navigation()
 
-with st.expander('설정 · 사용 모드와 Upstage 연결', expanded=False):
+with st.sidebar.expander('설정 · 사용 모드와 Upstage 연결', expanded=False):
     st.markdown('### 공고다음')
     st.caption('5G · 나의 다음 기회')
     mode=st.radio('사용 모드',['실제 AI 분석','예시 화면 체험'],index=1 if st.session_state.get('last_mode')=='예시 화면 체험' else 0,help='예시는 사람이 작성한 조건 데이터와 고정 규칙을 사용합니다. API를 호출하지 않습니다.')
@@ -179,15 +123,11 @@ if entry(ROOT):
 if 'notice' not in st.session_state:st.session_state.screen=1
 screen=st.session_state.screen
 labels=['공고 넣기','핵심 확인','내 상황','준비 목록']
-st.caption(f'{screen} / 4 단계 · 단계 이동 시 파일과 입력을 유지합니다.')
 if mode=='예시 화면 체험':st.caption('예시 체험 중 · API를 호출하지 않는 연습용 결과입니다.')
 with st.container(key='wizard_nav'):
     for col,number,label in zip(st.columns(4),range(1,5),labels):
         col.button(f'{number:02d} {label}',key=f'nav_{number}',type='primary' if number==screen else 'secondary',use_container_width=True,
                    disabled=(number>1 and 'notice' not in st.session_state) or (number==4 and screen!=3 and 'draft_answers' not in st.session_state),on_click=go,args=(number,))
-st.progress(screen/4)
-if st.session_state.get('_draft_restored'):
-    st.caption('저장된 준비 내용을 복원했습니다.' if team else '저장된 준비 내용을 복원했습니다. 새 AI 분석에는 API 키를 다시 입력하세요.')
 if screen==1:
     st.markdown('<div class="hero"><div class="hero-body"><h1>발견한 기회를,<br>나의 다음으로.</h1><p>공고를 올리면 필요한 조건과 준비할 서류를 정리해 드려요.</p></div><div class="feed-footer">PDF · HWP · HWPX · JPG · PNG</div></div>',unsafe_allow_html=True)
     st.subheader('01 / 어떤 공고가 궁금한가요?')
@@ -339,26 +279,23 @@ if screen==3:
             elif key in ('enrollment_status','long_term'):
                 label,options={'enrollment_status':('공고 기준일의 학적',['모르겠어요','재학','휴학','수료','졸업']),
                  'long_term':('공고의 전체 활동 기간에 참여할 수 있나요?',['모르겠어요','가능','어려움'])}[key]
-                if key=='long_term':st.caption('활동 기간: '+n.get('activity_period',''))
+                if key=='long_term':
+                    with st.expander('활동 기간 확인'):st.write(n.get('activity_period',''))
                 value=st.selectbox(label,options,key=widget,on_change=explicit_basic,args=(st.session_state,key))
                 a[key]=None if value=='모르겠어요' else value
             elif key=='unavailable_dates':
-                st.caption('참석 일정: '+n.get('schedule_rule',''))
+                with st.expander('참석 일정 확인'):st.write(n.get('schedule_rule',''))
                 schedule_state=st.selectbox('개인 일정 확인 상태',['아직 확인하지 않음','참석 불가 일정 없음','참석 불가 일정 있음'],key='schedule_state')
                 a[key]=None if schedule_state=='아직 확인하지 않음' else '참석 불가 일정 없음' if schedule_state=='참석 불가 일정 없음' else st.text_input('참석하기 어려운 날짜·시간',key=widget,max_chars=700)
             else:
                 label={'selected_center':'희망 활동 기관','skills':'명시된 우대와 관련된 내 역량'}[key]
                 a[key]=st.text_input(label,max_chars=700,key=widget)
-        for key,origin in st.session_state.get('profile_provenance',{}).items():
-            label={'enrollment_status':'학적','remaining_terms':'잔여학기','social_support':'사회적 배려 대상'}.get(key,'저장 정보')
-            st.caption('적용한 '+label+' · '+origin)
         a['profile_facts']=render_fact_overrides(n,a)
         a['answer_provenance']=st.session_state.get('profile_provenance',{})
         a['profile_revision']=fingerprint(st.session_state.get('common_profile',{}))
         questions,later_questions,covered=additional_questions(n,keys,items,stage)
         qa={}
         def draw_question(question):
-            if question.get('context'):st.caption('공고의 활동 의무: '+question['context'])
             widget='question_'+scope+'_'+question['id']
             if question.get('kind')=='social_support':
                 if st.session_state.get('profile_provenance',{}).get('social_support')!='이번 공고 답변':
@@ -368,12 +305,12 @@ if screen==3:
                         st.session_state[widget]=pv if pv in ('해당','해당 없음') else '아직 모름'
                         st.session_state.setdefault('profile_seeded',{})['social_support']=st.session_state[widget]
                         st.session_state.setdefault('profile_provenance',{})['social_support']=origin
-                value=st.selectbox(question['text'],['아직 모름','해당','해당 없음'],key=widget,on_change=explicit_basic,args=(st.session_state,'social_support'))
+                value=st.selectbox(question['text'],['아직 모름','해당','해당 없음'],key=widget,on_change=explicit_basic,args=(st.session_state,'social_support'),help='대상 여부만 답하세요. 증빙 준비는 다음 단계에서 확인합니다. 답변을 원하지 않으면 아직 모름으로 두세요.')
                 qa[question['text']]=None if value=='아직 모름' else value
-                st.caption('대상 여부만 답하세요. 증빙 준비 상태는 다음 단계에서 별도로 확인합니다. 답변을 원하지 않으면 아직 모름으로 두세요.')
             else:
                 qa[question['text']]=st.text_input(question['text'],key=widget,max_chars=700,placeholder='모르면 비워두세요')
-            with st.expander('질문에 연결된 공고 조건 · '+question['condition_label']):
+            with st.expander('공고 근거 보기 · '+question['condition_label']):
+                if question.get('context'):st.write(question['context'])
                 st.write(question['rule'] or '연결할 조건을 자동으로 확정하지 못했습니다. 원문에서 직접 확인하세요.')
                 st.caption('추출 근거 후보 · '+(question['page'] or '미확인')+'쪽')
                 st.text(question['quote'] or '인용문 없음')
@@ -415,39 +352,44 @@ if screen==4:
         stage=a.get('review_stage',STAGES[0])
         items=document_items(n,st.session_state.pages)
         scope=st.session_state.source_hash[:12]
-        st.subheader('04 / 나의 지원 준비')
+        st.header('나의 지원 준비')
         summary=st.container()
         condition_panel=st.container()
+        st.markdown('<div id="checklist" class="section-anchor"></div>',unsafe_allow_html=True)
         st.markdown('### 제출서류 체크리스트')
-        st.caption('체크는 본인이 표시한 준비 상태입니다. 서류 내용·유효성·실제 접수 여부를 검증한 것이 아닙니다. 분류는 공고 추출 문구 기준이므로 원문과 함께 확인하세요.')
+        with st.popover('체크리스트 안내'):
+            st.write('체크는 본인이 표시한 준비 상태입니다. 서류 내용·유효성·실제 접수 여부를 검증한 것이 아닙니다. 분류는 공고 추출 문구 기준이므로 원문과 함께 확인하세요.')
         states={}
         def draw_document(item):
-            value={}
-            prefix='doc_'+scope+'_'+item['id']
-            # Migrate prior multi-state preparation values into a simple checkbox.
-            if prefix+'_done' not in st.session_state:
-                st.session_state[prefix+'_done']=st.session_state.get(prefix+'_ready') in ('준비 완료','제출 완료')
-            linked_social=has_social(n) and social_document(item) and item['category']!='필수'
-            applicability=(social_answer(a) or '아직 모름') if linked_social else st.session_state.get(prefix+'_applies','아직 모름') if item['category']!='필수' else '해당'
-            done=st.checkbox(item['name']+' · 준비 완료',key=prefix+'_done',disabled=applicability=='해당 없음')
-            st.caption(item['category']+' · '+item['stage'])
-            if linked_social:
-                value['applicability']=applicability
-                st.caption('연결된 우대 대상 답변 · '+('확인 필요' if applicability=='아직 모름' else applicability)+' — 대상 여부는 3단계에서 수정하세요. 선택서류는 필수서류가 아닙니다.')
-            elif item['category'] in ('해당자만','선택','대상·필수 여부 확인'):
-                value['applicability']=st.selectbox('적용 대상 확인 · '+item['name'],['아직 모름','해당','해당 없음'],key=prefix+'_applies')
-            else:value['applicability']='해당'
-            value['readiness']='준비 완료' if done and applicability!='해당 없음' else '아직 확인하지 않음'
-            st.caption('준비 상태 · '+('해당 없음 (대상 아님)' if applicability=='해당 없음' else '준비 완료 (본인 확인)' if done else '확인 필요 — 체크하지 않은 상태를 준비 완료나 비대상으로 판단하지 않습니다.'))
-            states[item['id']]=value
-            with st.expander('근거 확인 · '+item['name']):
-                if item['source_found']:
-                    st.caption('문서에서 제출물 이름을 찾은 '+item['source_page']+'쪽 주변 구간입니다. 적용 대상·필수 여부까지 자동 검증한 것은 아닙니다.')
-                    st.text(item['source_quote'])
-                else:st.warning('추출된 제출물 이름을 원문에서 자동으로 찾지 못했습니다. 원문과 운영기관 안내를 확인하세요.')
-                st.caption('제출 시점 근거 · '+(item.get('stage_page') or '미확인')+'쪽')
-                st.text(item.get('stage_quote') or '제출 시점을 확정할 근거 없음')
-                st.caption(item.get('stage_reason',''))
+            with st.container(border=True,key='document_card_'+scope+'_'+item['id']):
+                value={}
+                prefix='doc_'+scope+'_'+item['id']
+                # Migrate prior multi-state preparation values into a simple checkbox.
+                if prefix+'_done' not in st.session_state:
+                    st.session_state[prefix+'_done']=st.session_state.get(prefix+'_ready') in ('준비 완료','제출 완료')
+                linked_social=has_social(n) and social_document(item) and item['category']!='필수'
+                applicability=(social_answer(a) or '아직 모름') if linked_social else st.session_state.get(prefix+'_applies','아직 모름') if item['category']!='필수' else '해당'
+                done=st.checkbox(item['name']+' · 준비 완료',key=prefix+'_done',disabled=applicability=='해당 없음')
+                if linked_social:
+                    value['applicability']=applicability
+                    with st.popover('우대 대상 답변 확인'):
+                        st.write('대상 여부: '+('확인 필요' if applicability=='아직 모름' else applicability)+' · 대상 여부는 3단계에서 수정하세요. 선택서류는 모든 사람의 필수서류가 아닙니다.')
+                elif item['category'] in ('해당자만','선택','대상·필수 여부 확인'):
+                    value['applicability']=st.selectbox('적용 대상 확인 · '+item['name'],['아직 모름','해당','해당 없음'],key=prefix+'_applies')
+                else:value['applicability']='해당'
+                applicability=value['applicability']
+                value['readiness']='준비 완료' if done and applicability!='해당 없음' else '아직 확인하지 않음'
+                status='해당 없음' if applicability=='해당 없음' else '준비 완료' if done else '확인 필요'
+                st.markdown('<div class="document-tags"><span class="doc-kind">'+html.escape(item['category'])+'</span><span class="doc-kind">'+html.escape(item['stage'])+'</span>'+status_badge(status)+'</div>',unsafe_allow_html=True)
+                states[item['id']]=value
+                with st.expander('근거 확인 · '+item['name']):
+                    if item['source_found']:
+                        st.caption('문서에서 제출물 이름을 찾은 '+item['source_page']+'쪽 주변 구간입니다. 적용 대상·필수 여부까지 자동 검증한 것은 아닙니다.')
+                        st.text(item['source_quote'])
+                    else:st.warning('추출된 제출물 이름을 원문에서 자동으로 찾지 못했습니다. 원문과 운영기관 안내를 확인하세요.')
+                    st.caption('제출 시점 근거 · '+(item.get('stage_page') or '미확인')+'쪽')
+                    st.text(item.get('stage_quote') or '제출 시점을 확정할 근거 없음')
+                    st.caption(item.get('stage_reason',''))
         from planning import later_item
         for item in items:
             if not later_item(item,stage) and item['stage']!=UNKNOWN_STAGE:draw_document(item)
@@ -469,32 +411,9 @@ if screen==4:
         if st.session_state.get('review_hash')!=current:st.session_state.pop('result',None)
         steps=next_steps(n,a,rows,st.session_state.get('result'))
         with condition_panel:
-            st.markdown('### 조건별 독립 판정표')
-            st.caption('한 조건의 미입력은 다른 조건의 불일치를 지우지 않습니다. 수치·명시된 학적·준비 상태를 개별 확인하며, 자유서술 답변은 입력만으로 일치 판정하지 않습니다.')
-            current_conditions=[r for r in a['independent_conditions'] if r['status']!='이후 단계']
-            order={'불일치':0,'확인 필요':1,'일치':2,'해당 없음':3}
-            def draw_condition(r):
-                color={'불일치':'#f9e8df','확인 필요':'#f8f1d9','일치':'#e2efdf','해당 없음':'#edf0ed','이후 단계':'#edf0ed'}[r['status']]
-                answer='미입력' if r['answer'] in (None,'') else str(r['answer'])
-                st.markdown('<div class="condition-row"><div><strong>'+html.escape(r['label'])+'</strong><small>'+html.escape(LABELS.get(r['category'],r['category']))+' · '+html.escape(r['stage'])+'</small></div><div>내 답변<small>'+html.escape(answer)+'</small></div><div><span class="badge" style="background:'+color+'">'+r['status']+'</span><small>'+html.escape(r['basis'])+'</small></div></div>',unsafe_allow_html=True)
-                with st.expander('판정 이유·원문 · '+r['label']):
-                    st.write(r['reason']);st.caption('근거 '+(r['page'] or '미확인')+'쪽 · '+('인용 확인' if r['verified'] else '근거 직접 확인 필요'))
-                    st.text(r['quote'] or '연결된 원문 없음')
-                    if r.get('stage_quote'):st.caption('시점 근거 '+r['stage_page']+'쪽');st.text(r['stage_quote'])
-            for r in sorted(current_conditions,key=lambda r:order.get(r['status'],4)):draw_condition(r)
-            future_conditions=[r for r in a['independent_conditions'] if r['status']=='이후 단계']
-            if future_conditions:
-                with st.expander(f'이후 단계 조건 {len(future_conditions)}개'):
-                    for r in future_conditions:draw_condition(r)
-            if not current_conditions:st.info('개별 판정을 위한 조건이 추출되지 않았습니다. 원문과 아래 AI 검토를 확인하세요.')
+            render_conditions(a['independent_conditions'],scope)
         with summary:
-            st.markdown('### 지금 할 일')
-            st.caption('준비 상태를 바꾸면 이 목록은 바로 갱신됩니다. 상세 AI 대조는 아래 버튼을 누를 때만 실행합니다.')
-            if n.get('application_deadline'):st.write('**접수 마감:** '+n['application_deadline']+' · '+(n.get('deadline_note') or '시각은 원문 확인'))
-            st.write('**제출 경로**')
-            st.text(n.get('submission_method') or '원문 또는 운영기관에 확인')
-            for i,step in enumerate(steps,1):
-                st.markdown(f'<div class="review-card"><strong>{i}. {html.escape(step["title"])}</strong><p>{html.escape(step["detail"])}</p></div>',unsafe_allow_html=True)
+            render_preparation_summary(n,rows,steps)
         st.session_state.preparation={'answers':a,'checklist':rows,'condition_rows':a['independent_conditions'],'next_actions':steps}
         st.download_button('내 준비 목록 저장 (TXT)',preparation_text(n,a,rows,steps),'5G_공고다음_준비목록.txt','text/plain')
         st.caption('실제 AI 대조 시 답변과 체크리스트의 준비 상태를 Upstage로 전달합니다.')

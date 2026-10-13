@@ -7,6 +7,7 @@ from workspaces import checkpoint,activate,refresh_profile
 
 def route(name):
     checkpoint(st.session_state);st.session_state.route=name
+    st.session_state['_navigation_changed']=True
 
 def start_upload():
     route('review');st.session_state.screen=1
@@ -70,29 +71,54 @@ def render_fact_overrides(notice,base_answers):
             st.text(c['quote']);st.caption('원문 '+(c['page'] or '?')+'쪽')
     st.session_state.profile_overrides=overrides
     facts=applied_facts(notice,st.session_state.get('common_profile',{}),overrides,base_answers,st.session_state.get('profile_provenance',{}))
-    for c in conditions:
-        f=facts[c['id']];st.caption(LABELS[c['field']]+' 적용: '+str(f['value'] if f['value'] is not None else '확인 필요')+' · '+f['origin'])
+    with st.expander('적용된 내 정보 확인'):
+        for c in conditions:
+            f=facts[c['id']];st.write(LABELS[c['field']]+' · '+str(f['value'] if f['value'] is not None else '확인 필요')+' · '+f['origin'])
     return facts
 
-def entry(root):
+def navigation():
+    view=st.session_state.get('route','review' if st.session_state.get('notice') else 'home')
+    st.markdown('### 공고다음')
+    st.caption('둘러보기')
     with st.container(key='entry_nav'):
-        for col,label,target in zip(st.columns(4),['홈','내 정보','공고 찾기','현재 공고'],['home','profile','catalog','review']):
-            col.button(label,on_click=route,args=(target,),key='entry_'+target,use_container_width=True)
+        for label,target in zip(['홈','내 정보','공고 찾기','현재 공고'],['home','profile','catalog','review']):
+            st.button(label,on_click=route,args=(target,),key='entry_'+target,use_container_width=True,type='primary' if view==target else 'secondary')
+    st.caption('바로 시작')
+    st.button('공고 직접 확인하기',on_click=start_upload,key='menu_upload',use_container_width=True)
+    st.button('나에게 맞는 공고 보기',on_click=route,args=('catalog',),key='menu_catalog',use_container_width=True)
+    st.divider()
+
+def resume_notices():
+    saved=st.session_state.get('workspaces',{})
+    with st.popover('저장한 공고 이어보기',icon=':material/bookmark:'):
+        if st.session_state.get('notice'):
+            st.button('현재 공고 이어보기',on_click=route,args=('review',),use_container_width=True)
+        if not saved and not st.session_state.get('notice'):
+            st.write('아직 저장한 공고가 없습니다. 공고를 확인하면 여기에 보관됩니다.')
+        for key,record in saved.items():
+            if st.button(record['values']['notice']['notice_title'],key='resume_'+key,use_container_width=True):
+                activate(st.session_state,record);st.rerun()
+
+def entry(root):
+    if st.session_state.pop('_navigation_changed',False):
+        # A menu selection should reveal the destination on small screens too.
+        st.html('''<script>requestAnimationFrame(() => {
+          document.querySelector('[data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarCollapseButton"] button')?.click();
+          document.querySelector('[data-testid="stMain"]')?.scrollTo({top:0,behavior:'instant'});
+        });</script>''',unsafe_allow_javascript=True)
     view=st.session_state.get('route','review' if st.session_state.get('notice') else 'home')
     if view=='review':return False
     if view=='profile':render_profile()
     elif view=='catalog':render_catalog(root)
     else:
-        st.markdown('<div class="hero"><div class="hero-body"><h1>나의 정보로,<br>다음 기회를 준비해요.</h1><p>공고 속 조건과 내 상황을 연결하고, 지금 필요한 준비를 확인하세요.</p></div></div>',unsafe_allow_html=True)
-        st.button('공고 직접 확인하기',on_click=start_upload,type='primary',use_container_width=True)
-        st.button('나에게 맞는 공고 보기',on_click=route,args=('catalog',),use_container_width=True)
-        st.caption('내 정보 등록은 선택입니다. 공고 하나만 확인할 때도 바로 시작할 수 있어요.')
-    saved=st.session_state.get('workspaces',{})
-    if saved:
-        with st.expander('저장한 공고 이어보기'):
-            for key,record in saved.items():
-                if st.button(record['values']['notice']['notice_title'],key='resume_'+key):
-                    activate(st.session_state,record);st.rerun()
+        with st.container(key='home_hero'):
+            title,resume=st.columns([3,1.4],vertical_alignment='bottom')
+            with title:
+                st.markdown('<div class="hero-eyebrow">장학금 · 대외활동 · 공모전</div><h1>나의 정보로,<br>다음 기회를 준비해요.</h1>',unsafe_allow_html=True)
+            with resume:resume_notices()
+        with st.container(key='home_primary'):
+            st.button('공고 직접 확인하기',on_click=start_upload,type='primary',use_container_width=True,help='공고 파일을 올리고 바로 조건 확인')
+    if view in ('profile','catalog'):resume_notices()
     return True
 
 def render_catalog(root):
