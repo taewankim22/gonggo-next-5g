@@ -88,6 +88,10 @@ hr{border-color:var(--line)}
 settings=json.loads((ROOT/'settings.json').read_text(encoding='utf-8')) if (ROOT/'settings.json').exists() else {}
 team,team_ledger=team_gate(ROOT,required=settings.get('team_required',False),password_required=settings.get('team_password_required',True))
 def run_agent(*args,**kwargs):
+    # This trace is server-session state, never accepted from a browser backup.
+    # The original submission already counted; resuming only retrieves its job.
+    if (kwargs.get('trace') or {}).get('job_id'):
+        return studio_run_agent(*args,**kwargs)
     return protected_call(team,st.session_state,team_ledger,studio_run_agent,*args,**kwargs)
 
 # Authenticate before restoring any browser draft or rendering app controls.
@@ -164,6 +168,7 @@ if st.session_state.get('last_mode')!=mode:
     clear_answers()
     st.session_state.screen=1
     st.session_state.pop('pending_file',None)
+    st.session_state.pop('_notice_request',None)
     st.session_state.last_mode=mode
 
 if entry(ROOT):
@@ -216,17 +221,25 @@ if screen==1:
                 st.image(data,caption='업로드한 원본 포스터',use_container_width=True)
             except ValueError as exc:st.error(str(exc))
         st.caption('공개 예시 공고는 2026년 1월 마감 자료로, 분석 검증에 사용합니다.')
-        if st.button('공고에서 조건 찾기',type='primary',use_container_width=True,disabled=not data):
+        requested=st.button('공고에서 조건 찾기',type='primary',use_container_width=True,disabled=not data)
+        pending=st.session_state.get('_notice_request')
+        if requested or pending:
             # Replace the current notice only after a successful analysis.
             try:
-                info=inspect_input(data,filename); pages=info['pages']; trace={}
+                if pending:
+                    data,filename=pending['data'],pending['filename']
+                    notice_id,notice_version=pending['agent_id'],pending['config_id']
+                info=inspect_input(data,filename); pages=info['pages']; trace=pending['trace'] if pending else {}
                 progress=st.empty()
                 from catalog import cached_public
-                cached=cached_public(ROOT,fingerprint(data),notice_id,notice_version)
+                cached=None if pending else cached_public(ROOT,fingerprint(data),notice_id,notice_version)
                 if cached:
                     n=cached['notice'];trace=cached.get('notice_trace',{});pages=cached['pages']
                     progress.info('동일한 공개 원문·설정 버전의 분석을 재사용했습니다.')
-                else:n=run_agent(api_key,notice_id,notice_version,data,filename,progress.info,mime=info['mime'],trace=trace)
+                else:
+                    if not pending:
+                        st.session_state['_notice_request']={'data':data,'filename':filename,'agent_id':notice_id,'config_id':notice_version,'trace':trace}
+                    n=run_agent(api_key,notice_id,notice_version,data,filename,progress.info,mime=info['mime'],trace=trace)
                 n=validate_payload(n,notice_schema())
                 ocr_pages=parse_pages(trace.get('steps',[]))
                 if not any(pages) or (n.get('_structured_notice') and any(ocr_pages)):pages=ocr_pages
@@ -235,8 +248,10 @@ if screen==1:
                 checkpoint(st.session_state);clear_active(st.session_state);clear_answers()
                 st.session_state.update(notice=map_image_page(n,info),raw_notice=dict(n),pages=pages,pdf=data,source_hash=fingerprint(data),source_info=info,source_filename=filename,notice_trace=trace,evidence_basis='Studio Parse 변환 본문' if n.get('_structured_notice') and any(ocr_pages) else 'PDF 텍스트' if info['pages'] and any(info['pages']) else 'Studio Parse 변환 본문' if info['kind']=='hangul' else 'Studio Parse OCR')
                 st.session_state.update(last_mode=mode,notice_config={'agent_id':notice_id,'config_id':notice_version})
-                progress.empty();go(2);st.rerun()
-            except (ValueError,StudioError) as exc: st.error(str(exc))
+                go(2);st.session_state.pop('_notice_request',None);st.rerun()
+            except (ValueError,StudioError) as exc:
+                st.session_state.pop('_notice_request',None)
+                st.error(str(exc))
     if 'notice' in st.session_state:
         st.button('분석한 공고 계속 보기 →',on_click=go,args=(2,),use_container_width=True)
 

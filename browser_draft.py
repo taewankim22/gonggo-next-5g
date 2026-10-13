@@ -152,7 +152,7 @@ def save_browser():
 def clear_draft():
     for key in list(st.session_state):
         if allowed(key) or key in ('common_profile','workspaces','route','pdf','pending_file','preparation','result','profile',
-             'raw_notice','raw_review','review_hash','review_pdf','notice_trace','review_trace'):
+             'raw_notice','raw_review','review_hash','review_pdf','notice_trace','review_trace','_notice_request'):
             st.session_state.pop(key,None)
     st.session_state.screen=1
     st.session_state['_draft_delete']=True

@@ -23,7 +23,7 @@ def test_roundtrip_file_answers_checklist_and_step(state):
 
 def test_credentials_and_runtime_state_never_serialized(state):
     for k in ['api_key','upstage_api_key','UPSTAGE_API_KEY','notice_trace',
-              'review_trace','raw_review','result','answer_api_key','doc_api_key','question_api_key']:
+              'review_trace','raw_review','result','answer_api_key','doc_api_key','question_api_key','_notice_request']:
         state[k]='DO-NOT-SAVE-SECRET'
     assert 'DO-NOT-SAVE-SECRET' not in json.dumps(snapshot(state))
 
