@@ -22,7 +22,7 @@ class TeamConfig:
     notice_version: str
     review_id: str
     review_version: str
-    daily_limit: int = 20
+    daily_limit: int = 0
     require_password: bool = True
 
     @property
@@ -46,9 +46,9 @@ def parse_config(values,password_required=True):
         raise ValueError('서버 비밀 설정의 Agent ID를 확인해주세요.')
     if not all(data[k].isdigit() and int(data[k])>0 for k in ('notice_version','review_version')):
         raise ValueError('설정 버전은 양의 정수여야 합니다.')
-    limit=values.get('daily_limit',20)
-    if type(limit) is not int or not 1<=limit<=100:
-        raise ValueError('daily_limit은 1~100 사이 정수로 설정해주세요.')
+    limit=values.get('daily_limit',0)
+    if type(limit) is not int or limit<0:
+        raise ValueError('daily_limit은 0 이상의 정수로 설정해주세요. 0은 횟수 제한 없음입니다.')
     return TeamConfig(**data,daily_limit=limit,require_password=require_password)
 
 
@@ -100,7 +100,7 @@ class Ledger:
         now=time.time() if now is None else now
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            if db.execute('SELECT COUNT(*) FROM calls WHERE ts>=?',(self.day_start(now),)).fetchone()[0]>=limit:
+            if limit>0 and db.execute('SELECT COUNT(*) FROM calls WHERE ts>=?',(self.day_start(now),)).fetchone()[0]>=limit:
                 raise ValueError('오늘 팀 전체 AI 호출 한도에 도달했습니다. 한국 시간 자정 이후 다시 사용하세요.')
             if db.execute('SELECT COUNT(*) FROM calls WHERE active=1 AND ts>?',(now-600,)).fetchone()[0]:
                 raise ValueError('다른 분석이 진행 중입니다. 완료 후 다시 눌러주세요.')
@@ -167,7 +167,8 @@ def team_gate(root,required=False,password_required=True):
                 st.error('팀 암호를 확인해주세요.')
         st.stop()
     label='팀 전용 연결' if config.require_password else '공개 테스트 · 암호 없이 이용 가능'
-    st.caption(f'{label} · 오늘 AI 호출 {ledger.used()} / {config.daily_limit}회 · 한국 시간 기준')
+    usage=f'오늘 AI 호출 {ledger.used()}회 · 횟수 제한 없음' if config.daily_limit==0 else f'오늘 AI 호출 {ledger.used()} / {config.daily_limit}회'
+    st.caption(f'{label} · {usage} · 한국 시간 기준')
     if config.require_password and st.button('팀 접속 종료'):
         st.session_state.clear()
         st.rerun()

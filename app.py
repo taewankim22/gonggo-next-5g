@@ -108,7 +108,8 @@ with st.expander('설정 · 사용 모드와 Upstage 연결', expanded=False):
         notice_id,notice_version=team.notice_id,team.notice_version
         review_id,review_version=team.review_id,team.review_version
         st.info('운영자의 Upstage 연결을 사용합니다. API 키와 Agent 설정은 서버에서 관리합니다.')
-        st.caption(f'공고 분석·맞춤 검토 각각 1회, 실패 요청 포함 하루 전체 {team.daily_limit}회. 동시 분석은 1건입니다.'+(' 접속은 2시간 후 만료됩니다.' if team.require_password else ' 공개 테스트 중에는 암호 없이 이용할 수 있습니다.'))
+        limit_note='하루 누적 호출 횟수 제한은 없습니다.' if team.daily_limit==0 else f'실패 요청 포함 하루 전체 {team.daily_limit}회로 제한합니다.'
+        st.caption('공고 분석·맞춤 검토 각각 1회로 집계합니다. '+limit_note+' 동시 분석은 1건, 호출 간격은 10초입니다.'+(' 접속은 2시간 후 만료됩니다.' if team.require_password else ' 공개 테스트 중에는 암호 없이 이용할 수 있습니다.'))
     else:
         api_key=st.text_input('Upstage API 키',value='',type='password',help='현재 세션에서만 사용하며 파일에 저장하지 않습니다.')
         notice_id=st.text_input('공고 분석 Agent ID',value=os.getenv('NOTICE_AGENT_ID',settings.get('notice_agent_id','')))

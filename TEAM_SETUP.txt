@@ -1,9 +1,8 @@
-공고다음 · 암호 없는 공개 테스트 설정 (실제 키는 이 파일에 쓰지 마세요)
+공고다음 · 암호 없는 공개 테스트 설정
 
-Streamlit 관리 화면 → 앱 Settings → Secrets에 아래 설정을 입력합니다.
-api_key 자리표시자만 본인의 값으로 바꾸고 Save를 누릅니다.
-기존 설정이 있으면 [team]을 중복 추가하지 말고 require_password=false를 적용하세요.
-password 항목은 공개 테스트에서 필요 없으며 기존 값이 있어도 사용하지 않습니다.
+아래 설정을 Streamlit 관리 화면 → 앱 Settings → Secrets에 입력합니다.
+API 키는 Secrets 화면에서만 채우세요. 이 파일이나 GitHub에 저장하지 마세요.
+기존 [team] 설정이 있으면 중복 추가하지 말고 수정합니다.
 
 [team]
 enabled = true
@@ -13,13 +12,11 @@ notice_id = "agt_bmPkaZ9TyocTVn7Nw4BEbh"
 notice_version = "4"
 review_id = "agt_joPSsuMsD6vr7zNLzicGve"
 review_version = "2"
-daily_limit = 20
+daily_limit = 0
 
-링크를 가진 사람은 누구나 운영자의 크레딧으로 분석할 수 있습니다.
-API 키는 서버 Secrets에만 보관하고 브라우저·GitHub·공유 파일에 넣지 않습니다.
-공고 분석과 맞춤 검토 각각 1회, 실패 포함 전체 하루 20회, 동시 1건, 간격 10초입니다.
-서버가 재생성되면 로컬 호출 장부가 초기화될 수 있으므로 영구적인 요금 상한은 아닙니다.
-한국 시간 자정을 기준으로 새 일일 한도가 적용됩니다.
-예시 화면 체험은 실제 API를 호출하지 않습니다.
-실제 AI 분석에서 공개 평가용 공고를 선택하고 '공고에서 조건 찾기'를 누르면 실제 호출됩니다.
-테스트 종료 시 enabled=false로 차단하거나 require_password=true와 12자 이상의 password를 설정하세요.
+Save 후 사이트를 새로고침합니다. 동료에게는 사이트 주소만 공유하세요.
+공개 테스트는 누구나 운영자 크레딧으로 호출할 수 있습니다.
+하루 호출 횟수 제한은 없습니다. 동시 1건·간격 10초는 유지합니다.
+호출 횟수는 한국 시간 기준으로 집계합니다. Upstage 크레딧과 서비스 제한은 별개입니다.
+키를 교체할 때는 Secrets의 api_key를 수정하세요. 새 키로 두 Agent에 접근할 수 있어야 합니다.
+중단 시 enabled=false, 암호 접속으로 바꾸려면 require_password=true와 12자 이상 password를 설정하세요.

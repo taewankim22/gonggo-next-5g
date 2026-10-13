@@ -14,8 +14,8 @@ def test_missing_or_invalid_secrets_fail_closed():
         with pytest.raises(ValueError):parse_config(values)
     values={'enabled':True,'api_key':'test','password':'test-password-123',
             'notice_id':'agt_n','notice_version':'4','review_id':'agt_r','review_version':'2'}
-    assert parse_config(values).daily_limit==20
-    for limit in (0,101,True,'20'):
+    assert parse_config(values).daily_limit==0
+    for limit in (-1,True,'20'):
         with pytest.raises(ValueError):parse_config(dict(values,daily_limit=limit))
 
 
@@ -47,6 +47,18 @@ def test_failures_count_and_limit_persists_in_new_ledger(tmp_path):
     with pytest.raises(ValueError,match='한도'):Ledger(ledger.path).reserve(2,100020)
     assert Ledger(ledger.path).used(100020)==2
     assert Ledger(ledger.path).used(200000)==0
+
+
+def test_unlimited_calls_exceed_old_cap_but_keep_concurrency_and_cooldown(tmp_path):
+    ledger=Ledger(tmp_path/'unlimited.sqlite')
+    for i in range(25):
+        token=ledger.reserve(0,100000+i*10)
+        ledger.release(token)
+    assert ledger.used(100240)==25
+    with pytest.raises(ValueError,match='10초'):ledger.reserve(0,100241)
+    token=ledger.reserve(0,100250)
+    with pytest.raises(ValueError,match='진행 중'):ledger.reserve(0,100260)
+    ledger.release(token)
 
 
 def test_auth_and_agent_checks_happen_before_call_or_quota(tmp_path):
