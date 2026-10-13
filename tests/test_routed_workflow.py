@@ -9,6 +9,16 @@ from conditions import bind_answers
 
 ROOT=Path(__file__).parents[1]
 
+
+def test_identical_questions_are_deduplicated_but_distinct_stages_stay_separate():
+    from workflow_adapter import structured_questions
+    current={'분류':'지원자격','조건':'연구팀 구성이 필요함','적용대상':'전체','적용단계':'지원단계'}
+    future={**current,'적용대상':'우수팀','적용단계':'선발 후·활동 중'}
+    n={'_structured_notice':{'지원조건':[current,dict(current),future]}}
+    active,later,_=structured_questions(n,'지원 검토 중')
+    assert len(active)==len(later)==1
+    assert active[0]['id']!=later[0]['id'] and active[0]['text']!=later[0]['text']
+
 def raw_notice():
     return {'공고명':'공개 시험 공고','공고유형':'대회·공모전','주최주관':'','접수방법':'','접수링크':'',
             '접수마감':'','접수마감설명':'','활동기간':'','지원조건':[],'제출서류':[],

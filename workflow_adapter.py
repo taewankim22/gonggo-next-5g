@@ -136,15 +136,20 @@ def structured_documents(notice,pages):
     return result
 
 def structured_questions(notice,stage):
-    from conditions import link_question,SOCIAL_QUESTION
-    active=[];later=[]
+    from conditions import link_question,SOCIAL_QUESTION,LABELS
+    active=[];later=[];seen=set()
     for row in notice['_structured_notice'].get('지원조건',[]):
         category=CATEGORY.get(row.get('분류'))
         if not category or not row.get('조건'):continue
         # Profiles already render questions for their linked current conditions.
         if row.get('대조항목') in FIELDS and row.get('비교방법') in ('같음','이상','이하') and not row.get('예외') and row.get('적용단계')=='지원단계' and category in ('eligibility','preference'):continue
-        text=row['조건']+' — 해당 조건을 충족하거나 이행할 수 있나요?'
+        # The same quoted sentence may be extracted for several profile fields.
+        # Ask an identical scoped question once, but preserve different targets
+        # and stages in both the widget identity and the answer mapping.
+        text=LABELS[category]+' · '+scoped(row)+' — 해당 조건을 충족하거나 이행할 수 있나요?'
         q=link_question(notice,text,category)
+        if q['id'] in seen:continue
+        seen.add(q['id'])
         q.update(rule=scoped(row),quote=row.get('근거원문',''),page=row.get('근거페이지',''),context=scoped(row))
         if (row.get('적용단계')=='선발 후·활동 중' and stage not in ('선발 후·활동 중','활동 종료 후')) or (row.get('적용단계')=='활동 종료 후' and stage!='활동 종료 후'):later.append(q)
         else:active.append(q)

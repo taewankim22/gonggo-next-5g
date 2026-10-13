@@ -30,6 +30,26 @@ def test_routed_workflow_result_questions_and_checklist_survive_navigation():
     at.button(key='nav_3').click().run()
     assert at.number_input(key='answer_weekly_visits').value==1
 
+
+def test_real_hwpx_duplicate_conditions_can_reach_preparation_without_widget_collision():
+    import json
+    from workflow_adapter import ground_notice,adapt_notice
+    root=Path(__file__).parents[1]
+    x=json.loads((root/'tests/fixtures/routed_hwpx13.json').read_text(encoding='utf-8'))
+    at=AppTest.from_file(str(root/'app.py')).run()
+    at.session_state.route='review';at.run()
+    at.radio[0].set_value('예시 화면 체험').run()
+    next(b for b in at.button if b.label=='예시 공고 살펴보기').click().run()
+    n=ground_notice(adapt_notice(x['raw']),x['pages'])
+    at.session_state.notice=n;at.session_state.raw_notice=n;at.session_state.pages=x['pages'];at.run()
+    at.button(key='nav_3').click().run()
+    assert not at.exception
+    at.button(key='nav_4').click().run()
+    assert not at.exception
+    rows=at.session_state.preparation['checklist']
+    certificate=next(r for r in rows if '전문사업연구자' in r['text'])
+    assert certificate['later']
+
 def test_preset_survives_rerun_and_answer_change_invalidates_result():
     at=AppTest.from_file(str(Path(__file__).parents[1]/'app.py')).run()
     at.session_state.route='review'
