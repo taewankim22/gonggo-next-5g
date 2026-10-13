@@ -17,6 +17,9 @@ from planning import question_keys, document_items, additional_questions, checkl
 from conditions import bind_answers, BASIC, LABELS, SOCIAL_QUESTION, social_document, social_answer, has_social
 from independent_review import condition_rows
 from source_context import UNKNOWN as UNKNOWN_STAGE
+from workspaces import checkpoint, clear_active, seed_basic, explicit_basic
+from profile_ui import entry, render_fact_overrides
+from profiles import applied_facts, RULE_VERSION
 
 ROOT=Path(__file__).parent
 load_dotenv(ROOT/'.env')
@@ -90,12 +93,13 @@ def run_agent(*args,**kwargs):
 # Authenticate before restoring any browser draft or rendering app controls.
 # Retain inputs independently of Streamlit's cleanup for hidden widgets.
 for state_key in list(st.session_state):
-    if state_key.startswith(('answer_', 'question_', 'doc_')) or state_key in ('profile_preset','schedule_state','show_later_questions'):
+    if state_key.startswith(('answer_', 'question_', 'doc_', 'fact_')) or state_key in ('profile_preset','schedule_state','show_later_questions'):
         st.session_state[state_key] = st.session_state[state_key]
 bootstrap()
 st.session_state.setdefault('screen', 1)
 def go(screen):
     st.session_state.screen = screen
+    st.session_state.route = 'review'
 
 def clear_answers():
     st.session_state.pop('_draft_restored',None)
@@ -154,6 +158,7 @@ with st.expander('설정 · 사용 모드와 Upstage 연결', expanded=False):
     st.caption('조건 검토 도구이며 지원 자격·선발 결과를 확정하지 않습니다.')
 
 if st.session_state.get('last_mode')!=mode:
+    checkpoint(st.session_state)
     for k in ['notice','raw_notice','result','pages','pdf','profile','source_hash','review_hash','review_pdf','source_info','source_filename','notice_trace','review_trace','raw_review','evidence_basis']:
         st.session_state.pop(k,None)
     clear_answers()
@@ -161,10 +166,10 @@ if st.session_state.get('last_mode')!=mode:
     st.session_state.pop('pending_file',None)
     st.session_state.last_mode=mode
 
-if mode=='실제 AI 분석' and st.session_state.get('notice_trace'):
-    previous=st.session_state.notice_trace
-    if previous.get('agent_id')!=notice_id or str(previous.get('config_id'))!=notice_version:
-        for k in ['notice','raw_notice','result','raw_review','review_hash']:st.session_state.pop(k,None)
+if entry(ROOT):
+    checkpoint(st.session_state)
+    save_browser()
+    st.stop()
 
 if 'notice' not in st.session_state:st.session_state.screen=1
 screen=st.session_state.screen
@@ -187,8 +192,9 @@ if screen==1:
         filename='hyundai_jump_13.pdf'
         st.write('**2026 현대점프스쿨 13기** · 마감된 평가용 공고')
         if st.button('예시 공고 살펴보기',type='primary',use_container_width=True):
+            checkpoint(st.session_state);clear_active(st.session_state)
             st.session_state.update(notice=json.loads((ROOT/'data/demo_notice.json').read_text(encoding='utf-8')),
-              pages=read_pdf(data),pdf=data,source_hash=fingerprint(data),source_filename=filename)
+              pages=read_pdf(data),pdf=data,source_hash=fingerprint(data),source_filename=filename,last_mode=mode)
             clear_answers();go(2);st.rerun()
     else:
         upload=st.file_uploader('공고문 PDF·한글(HWP/HWPX) 또는 포스터 이미지',type=['pdf','hwp','hwpx','jpg','jpeg','png'],key='notice_upload_'+str(st.session_state.get('_upload_generation',0)),help='15MB 이하. PDF 30페이지 이하. 한글은 암호·배포용 보호 없는 HWP 5.x/HWPX. 이미지는 가로·세로 200px 이상, 3천만 화소 이하. 공개 문서 또는 분석 권한이 있는 파일만 사용하세요.')
@@ -215,12 +221,18 @@ if screen==1:
             try:
                 info=inspect_input(data,filename); pages=info['pages']; trace={}
                 progress=st.empty()
-                n=run_agent(api_key,notice_id,notice_version,data,filename,progress.info,mime=info['mime'],trace=trace)
+                from catalog import cached_public
+                cached=cached_public(ROOT,fingerprint(data),notice_id,notice_version)
+                if cached:
+                    n=cached['notice'];trace=cached.get('notice_trace',{});pages=cached['pages']
+                    progress.info('동일한 공개 원문·설정 버전의 분석을 재사용했습니다.')
+                else:n=run_agent(api_key,notice_id,notice_version,data,filename,progress.info,mime=info['mime'],trace=trace)
                 n=validate_payload(n,notice_schema())
                 ocr_pages=parse_pages(trace.get('steps',[]))
                 if not any(pages):pages=ocr_pages
-                clear_answers()
+                checkpoint(st.session_state);clear_active(st.session_state);clear_answers()
                 st.session_state.update(notice=map_image_page(n,info),raw_notice=dict(n),pages=pages,pdf=data,source_hash=fingerprint(data),source_info=info,source_filename=filename,notice_trace=trace,evidence_basis='PDF 텍스트' if info['pages'] and any(info['pages']) else 'Studio Parse 변환 본문' if info['kind']=='hangul' else 'Studio Parse OCR')
+                st.session_state.update(last_mode=mode,notice_config={'agent_id':notice_id,'config_id':notice_version})
                 progress.empty();go(2);st.rerun()
             except (ValueError,StudioError) as exc: st.error(str(exc))
     if 'notice' in st.session_state:
@@ -265,6 +277,7 @@ if screen==3:
         items=document_items(n,st.session_state.pages)
         scope=st.session_state.source_hash[:12]
         keys=question_keys(n,{'selected_center':st.session_state.get('answer_selected_center','')})
+        seed_basic(st.session_state,n,st.session_state.get('common_profile',{}))
         st.caption('모르는 항목은 건너뛰세요. 비어 있는 답변은 조건 불일치가 아니라 확인 필요로 남깁니다.')
         def apply_preset():
             chosen=st.session_state.get('profile_preset')
@@ -287,12 +300,12 @@ if screen==3:
             st.caption('확인하는 조건 · '+LABELS[BASIC[key]])
             if key in ('remaining_terms','weekly_visits','weekly_hours'):
                 label={'remaining_terms':'공고 기준일의 잔여학기','weekly_visits':'주당 방문 가능한 횟수','weekly_hours':'주당 총 활동 가능한 시간'}[key]
-                a[key]=st.number_input(label,min_value=0,max_value=100,value=None,step=1,key=widget,placeholder='모르면 비워두세요')
+                a[key]=st.number_input(label,min_value=0,max_value=100,value=None,step=1,key=widget,placeholder='모르면 비워두세요',on_change=explicit_basic,args=(st.session_state,key))
             elif key in ('enrollment_status','long_term'):
                 label,options={'enrollment_status':('공고 기준일의 학적',['모르겠어요','재학','휴학','수료','졸업']),
                  'long_term':('공고의 전체 활동 기간에 참여할 수 있나요?',['모르겠어요','가능','어려움'])}[key]
                 if key=='long_term':st.caption('활동 기간: '+n.get('activity_period',''))
-                value=st.selectbox(label,options,key=widget)
+                value=st.selectbox(label,options,key=widget,on_change=explicit_basic,args=(st.session_state,key))
                 a[key]=None if value=='모르겠어요' else value
             elif key=='unavailable_dates':
                 st.caption('참석 일정: '+n.get('schedule_rule',''))
@@ -301,6 +314,10 @@ if screen==3:
             else:
                 label={'selected_center':'희망 활동 기관','skills':'명시된 우대와 관련된 내 역량'}[key]
                 a[key]=st.text_input(label,max_chars=700,key=widget)
+        for key,origin in st.session_state.get('profile_provenance',{}).items():st.caption('적용한 '+key+' · '+origin)
+        a['profile_facts']=render_fact_overrides(n,a)
+        a['answer_provenance']=st.session_state.get('profile_provenance',{})
+        a['profile_revision']=fingerprint(st.session_state.get('common_profile',{}))
         questions,later_questions,covered=additional_questions(n,keys,items,stage)
         qa={}
         def draw_question(question):
@@ -308,7 +325,14 @@ if screen==3:
             if question.get('context'):st.caption('공고의 활동 의무: '+question['context'])
             widget='question_'+scope+'_'+question['id']
             if question.get('kind')=='social_support':
-                value=st.selectbox(question['text'],['아직 모름','해당','해당 없음'],key=widget)
+                if st.session_state.get('profile_provenance',{}).get('social_support')!='이번 공고 답변':
+                    from profiles import profile_fact
+                    pv,origin=profile_fact(st.session_state.get('common_profile',{}),'social_support')
+                    if widget not in st.session_state or 'social_support' in st.session_state.get('profile_seeded',{}):
+                        st.session_state[widget]=pv if pv in ('해당','해당 없음') else '아직 모름'
+                        st.session_state.setdefault('profile_seeded',{})['social_support']=st.session_state[widget]
+                        st.session_state.setdefault('profile_provenance',{})['social_support']=origin
+                value=st.selectbox(question['text'],['아직 모름','해당','해당 없음'],key=widget,on_change=explicit_basic,args=(st.session_state,'social_support'))
                 qa[question['text']]=None if value=='아직 모름' else value
                 st.caption('대상 여부만 답하세요. 증빙 준비 상태는 다음 단계에서 별도로 확인합니다. 답변을 원하지 않으면 아직 모름으로 두세요.')
             else:
@@ -332,6 +356,9 @@ if screen==3:
         a['question_answers']=qa
         a['condition_answers']=bind_answers(n,keys,questions+later_questions,a,qa)
         a['preference_facts']={'social_support':qa.get(SOCIAL_QUESTION)} if has_social(n) else {}
+        for fact in a.get('profile_facts',{}).values():
+            if fact['field']=='social_support' and has_social(n):
+                fact.update(value=qa.get(SOCIAL_QUESTION),origin=st.session_state.get('profile_provenance',{}).get('social_support','이번 공고 답변'))
         a['deferred_questions']=[q['text'] for q in later_questions if q['text'] not in qa]
         a['other_facts']='\n'.join([q+' '+(v or '미입력') for q,v in qa.items()]+([extra] if extra else []))
         if st.session_state.get('draft_answers') != a:
@@ -343,6 +370,12 @@ if screen==3:
 if screen==4:
         n=st.session_state.notice
         a=dict(st.session_state.draft_answers)
+        a['profile_facts']=applied_facts(n,st.session_state.get('common_profile',{}),st.session_state.get('profile_overrides',{}),a,st.session_state.get('profile_provenance',{}))
+        for fact in a.get('profile_facts',{}).values():
+            if fact['field']=='social_support' and has_social(n):fact.update(value=social_answer(a),origin=st.session_state.get('profile_provenance',{}).get('social_support','이번 공고 답변'))
+        if a.get('profile_revision')!=fingerprint(st.session_state.get('common_profile',{})):
+            st.warning('공통 프로필이 바뀌었습니다. 3단계에서 적용 답변을 다시 확인해주세요. 이전 AI 결과는 표시하지 않습니다.')
+            st.session_state.pop('result',None)
         stage=a.get('review_stage',STAGES[0])
         items=document_items(n,st.session_state.pages)
         scope=st.session_state.source_hash[:12]
@@ -396,7 +429,7 @@ if screen==4:
         a['independent_conditions']=condition_rows(n,a,st.session_state.pages)
         # Pass all readiness states to Studio as user assertions, never as verified documents.
         a['other_facts']+='\n제출물 준비 상태(본인 확인):\n'+'\n'.join(r['text']+' / 적용: '+r['applicability']+' / 상태: '+r['readiness']+' / 제출 단계: '+r['stage'] for r in rows)
-        current=fingerprint({'logic_version':'independent-v1','source':st.session_state.source_hash,'answers':a,'mode':mode,'review_agent':review_id,'version':review_version})
+        current=fingerprint({'logic_version':RULE_VERSION,'source':st.session_state.source_hash,'answers':a,'mode':mode,'review_agent':review_id,'version':review_version})
         if st.session_state.get('review_hash')!=current:st.session_state.pop('result',None)
         steps=next_steps(n,a,rows,st.session_state.get('result'))
         with condition_panel:
@@ -501,4 +534,5 @@ if st.session_state.get('rendered_screen') != screen:
     </script>""", unsafe_allow_javascript=True)
     st.session_state.rendered_screen=screen
 
+checkpoint(st.session_state)
 save_browser()

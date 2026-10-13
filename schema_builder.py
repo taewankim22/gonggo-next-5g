@@ -63,6 +63,7 @@ def notice_schema():
         'other_questions':'지원자격·제출물 항목 중 고정 질문으로 확인할 수 없는 조건을 사용자에게 묻는 구체적인 질문들. 국적 제한, 나이, 대학유형, 작품 분야·식품 여부·상품화 여부, 제출서류 준비 등을 빠뜨리지 말 것. 단순히 누구도 지원 가능하다는 허용 문구를 필수조건 질문으로 바꾸지 않는다. 없다면 빈 문자열'
     }.items():p[key]=string('원본 문서의 '+desc)
     # Studio exports array guidance on items, with an empty parent description.
+    p['profile_conditions_json']=string('프로필로 대조할 원자 조건을 JSON 배열 문자열로 반환. 없으면 [] 문자열. 각 객체의 모든 키는 문자열: field(school,campus,enrollment_status,major,college_type,region,remaining_terms,gpa,income_band,social_support,nationality,age 중 하나), category(eligibility 또는 preference), rule(조건과 예외 전체), quote(한 페이지의 연속 원문 그대로), page(숫자), operator(eq,gte,lte,review), value(비교값), period(명시 기준시점: YYYY-MM 또는 YYYY-N학기, 없으면 빈 문자열), scale(성적 만점: 4.5,4.3,100; 없으면 빈 문자열), logic(single 또는 complex), scope(기관별·대상별 적용제한, 없으면 빈 문자열). 지역 또는 통학가능 같은 대안 조건, 성적 또는 백분위 대안, 예외가 있으면 반드시 complex/review. 기준학기 추측금지. 단일 무조건 수치 비교만 gte/lte, 단일 정확값만 eq. 부분 조건을 전체 자격 판정으로 바꾸지 말 것. 서류 준비 여부는 여기 넣지 않는다.')
     for spec in p.values():
         if spec['type']=='array':spec['description']=''
     return {'type':'object','properties':p}

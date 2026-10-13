@@ -1,6 +1,8 @@
 // IndexedDB is scoped to this browser and origin, not shared across visitors.
 // Only the Python allowlisted payload reaches this component; no DOM input scraping.
 const processed = new Map();
+let knownRevision;
+let queue=Promise.resolve();
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open('gonggo-next-drafts', 1);
@@ -9,15 +11,28 @@ function openDB() {
     req.onerror = () => reject(req.error);
   });
 }
-async function transaction(op, payload) {
+async function transaction(op, payload, revision) {
   const db = await openDB();
   try {
     return await new Promise((resolve, reject) => {
       const tx = db.transaction('drafts', op === 'load' ? 'readonly' : 'readwrite');
       const store = tx.objectStore('drafts');
-      const req = op === 'load' ? store.get('current') : op === 'delete'
-        ? store.delete('current') : store.put(payload, 'current');
-      tx.oncomplete = () => resolve(req.result);
+      const req = store.get('current');
+      let result;
+      req.onsuccess=()=>{
+        const existing=req.result;
+        const current=existing?._revision || 0;
+        if(op==='load'){result={payload:existing || null,revision:current};return;}
+        if(current !== (revision || 0)){result={status:'conflict',revision:current};return;}
+        if(op==='delete'){
+          store.delete('current');store.delete('legacy-v1-backup');
+          result={status:'deleted',revision:0};return;
+        }
+        if(existing?.version===1)store.put(existing,'legacy-v1-backup');
+        store.put({...payload,_revision:current+1},'current');
+        result={status:'saved',revision:current+1};
+      };
+      tx.oncomplete = () => resolve(result);
       tx.onerror = tx.onabort = () => reject(tx.error);
     });
   } finally { db.close(); }
@@ -33,13 +48,14 @@ export default function(component) {
   }
   label.textContent=data.op === 'load' ? '저장한 내용 확인 중…' : '이 브라우저에 저장 중…';
   processed.set(key,{signature,message:label.textContent});
-  transaction(data.op,data.payload).then(value=>{
-    const message=data.op === 'save' ? '이 브라우저에 저장 완료 · API 키 제외'
+  queue=queue.then(()=>transaction(data.op,data.payload,knownRevision ?? data.revision)).then(value=>{
+    if(value?.status!=='conflict' && value?.revision!==undefined) knownRevision=value.revision;
+    const message=value?.status==='conflict' ? '다른 탭의 변경을 보호하기 위해 저장을 중지했습니다.' : data.op === 'save' ? '이 브라우저에 저장 완료 · API 키 제외'
       : data.op === 'delete' ? '저장한 준비 내용을 삭제했습니다.' : '';
     processed.set(key,{signature,message});
     label.textContent=message;
-    if (data.op === 'load') setStateValue('loaded',{payload:value || null});
-    else setStateValue('saved',{digest:data.digest,status:data.op === 'delete' ? 'deleted' : 'saved'});
+    if (data.op === 'load') setStateValue('loaded',value);
+    else setStateValue('saved',{digest:data.digest,...value});
   }).catch(()=>{
     const message='브라우저 저장에 실패했습니다. 준비 목록을 내려받고 저장 허용·남은 공간을 확인하세요.';
     label.textContent=message;

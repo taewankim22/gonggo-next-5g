@@ -1,8 +1,9 @@
 {
-  "notice_agent_id": "",
-  "notice_config_id": "1",
-  "review_agent_id": "",
-  "review_config_id": "1",
+  "notice_agent_id": "agt_bmPkaZ9TyocTVn7Nw4BEbh",
+  "notice_config_id": "7",
+  "review_agent_id": "agt_joPSsuMsD6vr7zNLzicGve",
+  "review_config_id": "2",
+  "pin_agent_versions": true,
   "team_required": true,
   "team_password_required": false
 }

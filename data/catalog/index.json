@@ -1,0 +1,83 @@
+[
+  {
+    "id": "notice1",
+    "title": "2026 현대차그룹 대학생 교육봉사단 현대점프스쿨 13기 대학생 봉사자 (장학샘) 모집 안내",
+    "kind": "장학연계활동",
+    "file": "notice1.pdf",
+    "analysis": "notice1.json",
+    "sha256": "49c8c85f3fb741a3377ab659987249f6fc920dab5bde33ce31da0359475b48ed",
+    "deadline": "2026-01-26",
+    "source_url": "https://kuds.korea.ac.kr/bbs/kuds/154/175731/download.do",
+    "checked_at": "2026-10-13T12:56:04.534661+00:00",
+    "status": "ready",
+    "tags": [
+      "교육",
+      "봉사",
+      "장학"
+    ]
+  },
+  {
+    "id": "notice2",
+    "title": "2026년 Study in korea 서포터즈 모집",
+    "kind": "대외활동",
+    "file": "notice2.jpg",
+    "analysis": "notice2.json",
+    "sha256": "90b4b4b012842bdc06b57f3b051395d3fc9cdb22c0cd4c30af5cf195098958fb",
+    "deadline": "2026-05-29",
+    "source_url": "https://www.kumoh.ac.kr/iplec/sub0801.do?article.offset=290&articleLimit=10&articleNo=563114&mode=view",
+    "checked_at": "2026-10-13T12:56:04.537168+00:00",
+    "status": "ready",
+    "tags": [
+      "유학",
+      "홍보"
+    ]
+  },
+  {
+    "id": "notice3",
+    "title": "2026년 통영시 관광기념품 공모전",
+    "kind": "기타",
+    "file": "notice3.png",
+    "analysis": "notice3.json",
+    "sha256": "07707b6bd6029a2a99d51a538c90ef0f6a6de0a62ff14651bcefb4cd42a7a5e9",
+    "deadline": "2026-08-28",
+    "source_url": "https://www.kyungmin.ac.kr/homepage/page.do?m=V&menu=64&no=2026-01034&page=19",
+    "checked_at": "2026-10-13T12:56:04.543677+00:00",
+    "status": "ready",
+    "tags": [
+      "공모전",
+      "관광"
+    ]
+  },
+  {
+    "id": "notice4",
+    "title": "공모전 프로그램장학금 지원금 안내",
+    "kind": "장학금",
+    "file": "notice4.hwp",
+    "analysis": "notice4.json",
+    "sha256": "a2defbd9862521886196212f861b09664795bdbb52134ebfca1a19741873054a",
+    "deadline": "2026-12-30",
+    "source_url": "https://software.korea.ac.kr/bbs/software/804/269119/artclView.do",
+    "checked_at": "2026-10-13T12:56:04.547184+00:00",
+    "status": "ready",
+    "tags": [
+      "장학",
+      "공모전"
+    ]
+  },
+  {
+    "id": "notice5",
+    "title": "2026년푸른등대 한국수력원자력 K-원전 장학금 사업 계획[안]",
+    "kind": "장학금",
+    "file": "notice5.hwp",
+    "analysis": "notice5.json",
+    "sha256": "d85ff4f3beee4f0e25f59eed80f8d9373ad2ec98564b38b03920c3182b3ff7e3",
+    "deadline": "2026-09-28",
+    "source_url": "https://www.sejong.ac.kr/kor/intro/notice7.do?articleNo=893809&mode=view",
+    "checked_at": "2026-10-13T12:56:04.558350+00:00",
+    "status": "ready",
+    "tags": [
+      "장학",
+      "원자력"
+    ]
+  }
+]

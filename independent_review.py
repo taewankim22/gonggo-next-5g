@@ -56,6 +56,11 @@ def condition_rows(notice,answers,pages):
                          page=item.get('source_page',''),verified=verified,stage=item.get('stage'),basis='제출 시점·자기 확인',
                          action='해당 단계에서 확인하세요.' if later else '시점과 적용 대상부터 확인하세요.' if unknown else '이 서류의 준비 상태를 확인하세요.',
                          stage_quote=item.get('stage_quote',''),stage_page=item.get('stage_page',''),optional=item.get('category')=='선택'))
+    from profiles import profile_rows
+    for row in profile_rows(notice,answers,pages):
+        base_label={'잔여학기':'공고 기준일의 잔여학기','학적':'공고 기준일의 학적'}.get(row['label'])
+        if base_label and any(r['label']==base_label and r['verified'] and r['answer']==row['answer'] and r['status']==row['status'] for r in rows):continue
+        rows.append(row)
     return rows
 
 def apply_independent_checks(cards,rows):

@@ -143,6 +143,14 @@ def team_gate(root,required=False,password_required=True):
         return None,None
     try:
         config=parse_config(raw or {},password_required=password_required)
+        # Public release pins tested agent versions; credentials and access policy remain in Secrets.
+        import json
+        from dataclasses import replace
+        release_path=root/'settings.json'
+        release=json.loads(release_path.read_text(encoding='utf-8')) if release_path.exists() else {}
+        if release.get('pin_agent_versions'):
+            config=replace(config,notice_id=release['notice_agent_id'],notice_version=release['notice_config_id'],
+                           review_id=release['review_agent_id'],review_version=release['review_config_id'])
         ledger=Ledger(root/'runtime'/'team_usage.sqlite3')
     except (ValueError,sqlite3.Error,OSError) as exc:
         st.title('공고다음 · 팀 체험 준비 중')
