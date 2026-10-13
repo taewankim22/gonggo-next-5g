@@ -3,5 +3,6 @@
   "notice_config_id": "1",
   "review_agent_id": "",
   "review_config_id": "1",
-  "team_required": true
+  "team_required": true,
+  "team_password_required": false
 }

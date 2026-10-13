@@ -23,19 +23,25 @@ class TeamConfig:
     review_id: str
     review_version: str
     daily_limit: int = 20
+    require_password: bool = True
 
     @property
     def auth_tag(self):
         return hmac.new(self.api_key.encode(), self.password.encode(), hashlib.sha256).hexdigest()
 
 
-def parse_config(values):
+def parse_config(values,password_required=True):
     if values.get('enabled') is not True:
         raise ValueError('팀 공유 설정의 enabled를 true로 설정해주세요.')
     fields=['api_key','password','notice_id','notice_version','review_id','review_version']
     data={k:str(values.get(k,'')).strip() for k in fields}
-    if not all(data.values()) or len(data['password']) < 12:
-        raise ValueError('서버 비밀 설정에 API 키, 12자 이상의 팀 암호, 두 Agent ID와 버전이 필요합니다.')
+    require_password=values.get('require_password',password_required)
+    if type(require_password) is not bool:
+        raise ValueError('require_password는 true 또는 false로 설정해주세요.')
+    if not all(data[k] for k in fields if k!='password'):
+        raise ValueError('서버 비밀 설정에 API 키와 두 Agent ID·버전이 필요합니다.')
+    if require_password and len(data['password']) < 12:
+        raise ValueError('암호 접속을 사용할 때는 12자 이상의 팀 암호가 필요합니다.')
     if not all(data[k].startswith('agt_') for k in ('notice_id','review_id')):
         raise ValueError('서버 비밀 설정의 Agent ID를 확인해주세요.')
     if not all(data[k].isdigit() and int(data[k])>0 for k in ('notice_version','review_version')):
@@ -43,10 +49,12 @@ def parse_config(values):
     limit=values.get('daily_limit',20)
     if type(limit) is not int or not 1<=limit<=100:
         raise ValueError('daily_limit은 1~100 사이 정수로 설정해주세요.')
-    return TeamConfig(**data,daily_limit=limit)
+    return TeamConfig(**data,daily_limit=limit,require_password=require_password)
 
 
 def authorized(state, config, now=None):
+    if not config.require_password:
+        return True
     now=time.time() if now is None else now
     return (hmac.compare_digest(str(state.get('_team_auth','')),config.auth_tag)
             and 0<=now-state.get('_team_login_at',0)<7200)
@@ -122,7 +130,7 @@ def protected_call(config,state,ledger,runner,api_key,agent_id,version,*args,**k
         ledger.release(token)
 
 
-def team_gate(root,required=False):
+def team_gate(root,required=False,password_required=True):
     import streamlit as st
     try:
         raw=st.secrets.get('team',None)
@@ -134,11 +142,11 @@ def team_gate(root,required=False):
     if raw is None and not required:
         return None,None
     try:
-        config=parse_config(raw or {})
+        config=parse_config(raw or {},password_required=password_required)
         ledger=Ledger(root/'runtime'/'team_usage.sqlite3')
     except (ValueError,sqlite3.Error,OSError) as exc:
         st.title('공고다음 · 팀 체험 준비 중')
-        st.info('운영자가 서버의 팀 연결 설정을 완료하면 암호로 접속할 수 있습니다.')
+        st.info('운영자가 서버의 Upstage 연결 설정을 완료하면 사용할 수 있습니다.')
         # Configuration errors contain fixed messages only, never values.
         if isinstance(exc,ValueError):st.caption(str(exc))
         st.stop()
@@ -158,8 +166,9 @@ def team_gate(root,required=False):
             else:
                 st.error('팀 암호를 확인해주세요.')
         st.stop()
-    st.caption(f'팀 전용 연결 · 오늘 AI 호출 {ledger.used()} / {config.daily_limit}회 · 한국 시간 기준')
-    if st.button('팀 접속 종료'):
+    label='팀 전용 연결' if config.require_password else '공개 테스트 · 암호 없이 이용 가능'
+    st.caption(f'{label} · 오늘 AI 호출 {ledger.used()} / {config.daily_limit}회 · 한국 시간 기준')
+    if config.require_password and st.button('팀 접속 종료'):
         st.session_state.clear()
         st.rerun()
     return config,ledger

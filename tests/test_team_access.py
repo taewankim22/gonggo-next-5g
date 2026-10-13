@@ -71,6 +71,43 @@ def test_login_throttle_is_shared_and_expires(tmp_path):
     assert Ledger(path).allow_login_attempt(1601)
 
 
+def test_public_access_needs_explicit_setting_and_keeps_quota(tmp_path):
+    values={'enabled':True,'api_key':'unit-test-key','notice_id':'agt_notice',
+            'notice_version':'4','review_id':'agt_review','review_version':'2','daily_limit':1}
+    with pytest.raises(ValueError):parse_config(values)
+    cfg=parse_config(values,password_required=False)
+    assert authorized({},cfg)
+    ledger=Ledger(tmp_path/'public.sqlite')
+    calls=[]
+    def runner(key,*args,**kwargs):
+        assert key=='unit-test-key'
+        calls.append(args)
+        return {'result':'ok'}
+    assert protected_call(cfg,{},ledger,runner,'','agt_notice','4',b'pdf')=={'result':'ok'}
+    with pytest.raises(ValueError,match='한도'):
+        protected_call(cfg,{},ledger,runner,'','agt_review','2',b'pdf')
+    assert len(calls)==1
+    with pytest.raises(ValueError):parse_config(dict(values,require_password=True),password_required=False)
+    with pytest.raises(ValueError):parse_config(dict(values,require_password='false'))
+
+
+def test_public_ui_opens_without_password_but_never_exposes_key(monkeypatch,tmp_path):
+    from streamlit.testing.v1 import AppTest
+    import team_access
+    monkeypatch.setattr('browser_draft.bootstrap',lambda:None)
+    monkeypatch.setattr('browser_draft.save_browser',lambda:None)
+    original=team_access.Ledger
+    monkeypatch.setattr(team_access,'Ledger',lambda path:original(tmp_path/'public-ui.sqlite'))
+    at=AppTest.from_file(str(Path(__file__).parents[1]/'app.py'))
+    at.secrets['team']={'enabled':True,'require_password':False,'api_key':'unit-test-key',
+                        'notice_id':'agt_notice','notice_version':'4','review_id':'agt_review','review_version':'2'}
+    at.run()
+    assert not at.exception and len(at.radio)==1
+    assert not any(x.label in ('팀 접속 암호','Upstage API 키','공고 분석 Agent ID') for x in at.text_input)
+    assert any('암호 없이' in x.value for x in at.caption)
+    assert not any(b.label=='팀 접속 종료' for b in at.button)
+
+
 def test_team_ui_hides_keys_and_prevents_unauthenticated_controls(monkeypatch,tmp_path):
     from streamlit.testing.v1 import AppTest
     import team_access
@@ -79,7 +116,7 @@ def test_team_ui_hides_keys_and_prevents_unauthenticated_controls(monkeypatch,tm
     original=team_access.Ledger
     monkeypatch.setattr(team_access,'Ledger',lambda path:original(tmp_path/'app.sqlite'))
     at=AppTest.from_file(str(Path(__file__).parents[1]/'app.py'))
-    at.secrets['team']={'enabled':True,'api_key':'unit-test-key','password':'unit-test-password',
+    at.secrets['team']={'enabled':True,'require_password':True,'api_key':'unit-test-key','password':'unit-test-password',
                         'notice_id':'agt_notice','notice_version':'4','review_id':'agt_review','review_version':'2'}
     at.run()
     assert not at.exception and len(at.radio)==0
