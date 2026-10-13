@@ -10,6 +10,9 @@ from reportlab.lib.styles import ParagraphStyle
 
 def comparison_pdf(notice, answers):
     """Create a text PDF for the second Studio workflow; no original-page renumbering."""
+    # Nested source tables and the public Instruct prose duplicate these facts.
+    # Keep the source-backed personal condition rows in USER_ANSWERS instead.
+    notice={k:v for k,v in notice.items() if not k.startswith('_')}
     font='GonggoKorean'
     font_path=Path('C:/Windows/Fonts/malgun.ttf')
     if font_path.exists():

@@ -229,9 +229,11 @@ if screen==1:
                 else:n=run_agent(api_key,notice_id,notice_version,data,filename,progress.info,mime=info['mime'],trace=trace)
                 n=validate_payload(n,notice_schema())
                 ocr_pages=parse_pages(trace.get('steps',[]))
-                if not any(pages):pages=ocr_pages
+                if not any(pages) or (n.get('_structured_notice') and any(ocr_pages)):pages=ocr_pages
+                from workflow_adapter import ground_notice
+                n=ground_notice(n,pages)
                 checkpoint(st.session_state);clear_active(st.session_state);clear_answers()
-                st.session_state.update(notice=map_image_page(n,info),raw_notice=dict(n),pages=pages,pdf=data,source_hash=fingerprint(data),source_info=info,source_filename=filename,notice_trace=trace,evidence_basis='PDF 텍스트' if info['pages'] and any(info['pages']) else 'Studio Parse 변환 본문' if info['kind']=='hangul' else 'Studio Parse OCR')
+                st.session_state.update(notice=map_image_page(n,info),raw_notice=dict(n),pages=pages,pdf=data,source_hash=fingerprint(data),source_info=info,source_filename=filename,notice_trace=trace,evidence_basis='Studio Parse 변환 본문' if n.get('_structured_notice') and any(ocr_pages) else 'PDF 텍스트' if info['pages'] and any(info['pages']) else 'Studio Parse 변환 본문' if info['kind']=='hangul' else 'Studio Parse OCR')
                 st.session_state.update(last_mode=mode,notice_config={'agent_id':notice_id,'config_id':notice_version})
                 progress.empty();go(2);st.rerun()
             except (ValueError,StudioError) as exc: st.error(str(exc))
@@ -262,11 +264,30 @@ if screen==2:
                 st.caption('아래는 Studio Parse가 읽어낸 본문입니다. 표 배치와 페이지 번호는 원본과 다를 수 있습니다.')
                 for page_number,page_text in enumerate(st.session_state.pages,1):
                     st.text(f'변환 본문 {page_number}페이지\n{page_text}')
-        for conflict in n['source_conflicts']: st.caption('확인할 점 · '+conflict)
+        if n.get('_structured_notice') and n['source_conflicts']:
+            with st.expander('원문 유의사항과 추후 공지',expanded=False):
+                for conflict in n['source_conflicts']:st.write(conflict)
+        else:
+            for conflict in n['source_conflicts']: st.caption('확인할 점 · '+conflict)
         st.write('**지원 대상**')
         st.write(n.get('eligibility_rule') or '명시되지 않음 · 원문 확인')
         st.write('**제출 방법**')
         st.text(n.get('submission_method') or '원문 또는 운영기관에 확인')
+        if n.get('_structured_notice'):
+            st.write('**혜택과 지원 범위**')
+            st.write(n.get('benefits') or '금액·혜택 미기재 · 상세 공고 확인')
+            with st.expander('조건·서류·일정을 항목별로 확인',expanded=False):
+                for title in ('지원조건','제출서류','일정','혜택'):
+                    entries=n['_structured_notice'].get(title,[])
+                    if entries:
+                        st.write('**'+title+'**')
+                        from core import evidence
+                        checked=[{**r,'인용 대조':'본문에서 확인' if evidence(r.get('근거원문',''),r.get('근거페이지',''),st.session_state.pages) else '원문 직접 확인 필요'} for r in entries]
+                        st.dataframe(checked,hide_index=True,use_container_width=True)
+            if n.get('_workflow_review'):
+                with st.expander('AI가 짚은 불일치와 다음 행동',expanded=True):
+                    st.caption('공고 원문 검토 안내입니다. 개인의 지원 자격을 확정한 결과는 아닙니다.')
+                    st.markdown(n['_workflow_review'])
         st.caption('다음 단계에서는 이 공고에 필요한 질문만 보여드립니다.')
         st.button('내 상황 입력하기 →',type='primary',on_click=go,args=(3,),use_container_width=True)
         st.button('← 공고 넣기로',on_click=go,args=(1,))

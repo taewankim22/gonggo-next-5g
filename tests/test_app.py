@@ -10,6 +10,26 @@ def browser_transport(monkeypatch):
     monkeypatch.setattr('browser_draft.save_browser',lambda:None)
     monkeypatch.setattr('team_access.team_gate',lambda *args,**kwargs:(None,None))
 
+def test_routed_workflow_result_questions_and_checklist_survive_navigation():
+    import json
+    root=Path(__file__).parents[1]
+    x=json.loads((root/'tests/fixtures/routed_pdf13.json').read_text(encoding='utf-8'))
+    from workflow_adapter import ground_notice,adapt_notice
+    at=AppTest.from_file(str(root/'app.py')).run()
+    at.session_state.route='review';at.run()
+    at.radio[0].set_value('예시 화면 체험').run()
+    next(b for b in at.button if b.label=='예시 공고 살펴보기').click().run()
+    n=ground_notice(adapt_notice(x['raw']),x['pages'])
+    at.session_state.notice=n;at.session_state.raw_notice=n;at.session_state.pages=x['pages'];at.run()
+    assert not at.exception
+    assert any('AI가 짚은' in e.label for e in at.expander)
+    at.button(key='nav_3').click().run()
+    at.number_input(key='answer_weekly_visits').set_value(1).run()
+    at.button(key='nav_4').click().run()
+    assert not at.exception
+    at.button(key='nav_3').click().run()
+    assert at.number_input(key='answer_weekly_visits').value==1
+
 def test_preset_survives_rerun_and_answer_change_invalidates_result():
     at=AppTest.from_file(str(Path(__file__).parents[1]/'app.py')).run()
     at.session_state.route='review'

@@ -40,12 +40,19 @@ def evidence(quote, page, pages):
         n = int(page)
     except (TypeError, ValueError):
         return False
-    q = normalize(quote)
-    return bool(len(q) >= 8 and 1 <= n <= len(pages) and q in normalize(pages[n - 1]))
+    def evidence_text(text):
+        # Parse emits Markdown table separators; they are layout, not source words.
+        text=re.sub(r'(?m)^\s*\|([^\n]+)\|\s*$',lambda m:m[1].replace('|',' '),text or '')
+        return normalize(text)
+    q = evidence_text(quote)
+    return bool(len(q) >= 8 and 1 <= n <= len(pages) and q in evidence_text(pages[n - 1]))
 
 def validate_payload(data, schema):
     if not isinstance(data, dict):
         raise ValueError('분석 결과가 JSON 객체가 아닙니다. 워크플로우 설정을 확인해주세요.')
+    if 'notice_title' in schema['properties'] and '공고유형' in data:
+        from workflow_adapter import adapt_notice
+        data=adapt_notice(data)
     clean = {}
     for key, spec in schema['properties'].items():
         value = data.get(key)
@@ -59,6 +66,8 @@ def validate_payload(data, schema):
             clean[key] = value
     if 'question_keys' in clean:
         clean['question_keys'] = [k for k in QUESTION_KEYS if k in clean['question_keys']]
+        for key in ('_structured_notice','_workflow_review','_basic_evidence'):
+            if key in data:clean[key]=data[key]
     return clean
 
 def numeric(value):

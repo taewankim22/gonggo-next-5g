@@ -41,6 +41,8 @@ def bind_answers(notice,keys,questions,answers,qa):
     for key in keys:
         if key in BASIC:
             record=link_question(notice,BASIC_LABELS[key],BASIC[key]);record.update(answer_key=key,answer=answers.get(key))
+            source=notice.get('_basic_evidence',{}).get(key)
+            if source:record.update(rule=source.get('조건',''),quote=source.get('근거원문',''),page=source.get('근거페이지',''))
             links.append(record)
     for q in questions:
         if q['text'] in qa:

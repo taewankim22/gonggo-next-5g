@@ -63,5 +63,21 @@ def test_final_export_matches_schema():
         p=root/f'agent_configs/{name}.mission2.export.json'
         if not p.exists():pytest.skip('final exported workflow unavailable')
         d=json.loads(p.read_text(encoding='utf-8'))
-        actual=d['workflowConfig']['informationExtractConfiguration']['schemas'][0]['json_schema']['schema']['properties']
-        assert actual==fn()['properties']
+        config=d['workflowConfig']
+        if name=='notice' and config.get('documentClassifyConfiguration'):
+            schemas=config['informationExtractConfiguration']['schemas']
+            mapping=config['informationExtractConfiguration']['categorySchemaMapping']
+            assert set(mapping)=={'장학금','대외활동·봉사','대회·공모전','기타'}
+            assert len(schemas)==len(config['instructConfiguration']['nodes'])==4
+            assert set(mapping.values())=={s['json_schema']['name'] for s in schemas}
+            for schema in schemas:
+                props=schema['json_schema']['schema']['properties']
+                assert props['공고명']['type']=='string'
+                assert {'지원조건','제출서류','일정','혜택','문의처','주의사항'}<=set(props)
+                for key in ('지원조건','제출서류','일정','혜택'):
+                    assert props[key]['type']=='array'
+                    assert {'근거원문','근거페이지'}<=set(props[key]['items']['properties'])
+            assert len(config['pipelineEdges'])==9
+        else:
+            actual=config['informationExtractConfiguration']['schemas'][0]['json_schema']['schema']['properties']
+            assert actual==fn()['properties']

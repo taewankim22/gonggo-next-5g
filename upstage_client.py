@@ -16,7 +16,39 @@ def decode_output(text):
     except (ValueError, TypeError):
         raise StudioError('Studio 응답이 JSON이 아닙니다. Extract 결과와 스키마를 확인해주세요.') from None
 
-def run_agent(api_key, agent_id, config_id, pdf, filename='notice.pdf', progress=None, timeout=240, mime='application/pdf', trace=None):
+def decode_steps(steps, fallback=''):
+    extracts=[s for s in steps if 'extract' in str(s.get('model','')).lower() and any(c.get('text') for c in s.get('content',[]) if c.get('type')=='output_text')]
+    texts=[c.get('text','') for s in (extracts[-1:] or steps[-1:]) for c in s.get('content',[]) if c.get('type')=='output_text']
+    result=decode_output(''.join(texts) if texts else fallback)
+    if isinstance(result,dict) and '공고유형' in result:
+        classified=[c.get('text','').strip().strip('"') for step in steps if 'classify' in str(step.get('model','')).lower() for c in step.get('content',[]) if c.get('type')=='output_text']
+        if classified and classified[-1] in ('장학금','대외활동·봉사','대회·공모전','기타'):result['공고유형']=classified[-1]
+        reviews=[]
+        for step in steps:
+            if 'instruct' not in str(step.get('model','')).lower():continue
+            for c in step.get('content',[]):
+                if c.get('type')!='output_text':continue
+                text=c.get('text','')
+                try:
+                    decoded=json.loads(text)
+                    if isinstance(decoded,str):text=decoded
+                except (ValueError,TypeError):pass
+                # Studio citation identifiers are not page numbers; resolve the supplied mapping.
+                import re
+                extra=c.get('additional_values') or {}
+                if isinstance(extra,str):
+                    try:extra=json.loads(extra)
+                    except ValueError:extra={}
+                citations={str(v.get('index')):v.get('page') for v in extra.get('citations',[]) if isinstance(v,dict)} if isinstance(extra,dict) else {}
+                def source_page(match):
+                    page=citations.get(match[1])
+                    return f' (원문 {page}쪽)' if isinstance(page,int) and page>0 else ''
+                text=re.sub(r'【†(\d+)】',source_page,text)
+                reviews.append(text)
+        result['_workflow_review']='\n\n'.join(reviews)
+    return result
+
+def run_agent(api_key, agent_id, config_id, pdf, filename='notice.pdf', progress=None, timeout=600, mime='application/pdf', trace=None):
     if not api_key or not agent_id.startswith('agt_'):
         raise StudioError('연결 설정에 API 키와 올바른 Agent ID를 입력해주세요.')
     started = time.monotonic()
@@ -38,11 +70,9 @@ def run_agent(api_key, agent_id, config_id, pdf, filename='notice.pdf', progress
                 raise StudioError('Studio 분석이 완료되지 않았습니다. 실행 내역과 크레딧, 워크플로우 설정을 확인해주세요.'+hint)
             dumped=response.model_dump()
             steps=dumped.get('output',[])
-            extracts=[s for s in steps if 'extract' in str(s.get('model','')).lower()]
-            texts=[c.get('text','') for s in (extracts[-1:] or steps[-1:]) for c in s.get('content',[]) if c.get('type')=='output_text']
             if trace is not None:
                 trace.update(job_id=response.id,agent_id=agent_id,config_id=config_id,file_id=file.id,created_at=response.created_at,steps=steps)
-            return decode_output(''.join(texts) if texts else response.output_text)
+            return decode_steps(steps,getattr(response,'output_text',''))
     except StudioError:
         raise
     except Exception as exc:

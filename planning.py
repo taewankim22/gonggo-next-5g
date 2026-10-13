@@ -27,6 +27,9 @@ def question_keys(notice, answers=None):
     return keys
 
 def document_items(notice, pages):
+    if notice.get('_structured_notice'):
+        from workflow_adapter import structured_documents
+        return structured_documents(notice,pages)
     items=[];seen=set()
     for raw in notice.get('required_documents',[]):
         if not raw.strip() or normalize(raw) in seen:continue
@@ -44,6 +47,9 @@ def later_item(item,stage):
     return False
 
 def additional_questions(notice, keys, items, stage):
+    if notice.get('_structured_notice'):
+        from workflow_adapter import structured_questions
+        return structured_questions(notice,stage)
     active=[];later=[];covered=[]
     chunks=re.split(r'\?\s*[,，]\s*|\n+',notice.get('other_questions',''))
     for chunk in chunks:
@@ -97,6 +103,8 @@ def next_steps(notice, answers, rows, cards=None):
     if conflicts:add('조건이 다른 항목 확인', ' / '.join(c['title']+': '+c['action'] for c in conflicts))
     independent_conflicts=[r for r in answers.get('independent_conditions',[]) if r['status']=='불일치' and r['verified']]
     if independent_conflicts and not conflicts:add('조건이 다른 항목 확인',' / '.join(r['reason'] for r in independent_conflicts)+' — 다른 질문의 미입력과 별도로 확인하세요.')
+    pending_notices=[r.get('내용','') for r in notice.get('_structured_notice',{}).get('주의사항',[]) if '추후' in r.get('내용','') and re.search(r'제출|서류|자료',r.get('내용',''))]
+    if pending_notices:add('추가 제출자료 공지 확인',' · '.join(pending_notices)+' — 현재 체크리스트만으로 모든 제출물을 준비했다고 판단하지 마세요.')
     current=[r for r in rows if not r['later'] and r['stage']!=UNKNOWN and r['applicability']!='해당 없음']
     pending=[r['name']+(' (선택 · 제출하려는 경우)' if r['category']=='선택' else '') for r in current if r['readiness'] not in ('준비 완료','제출 완료') and r['applicability']=='해당' and r['source_found']]
     unclear=[r['name'] for r in current if r['applicability']=='아직 모름' or not r['source_found']]
