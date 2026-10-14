@@ -205,6 +205,9 @@ if screen==1:
     if 'notice' in st.session_state:
         st.button('분석한 공고 계속 보기 →',on_click=go,args=(2,),use_container_width=True)
 
+if screen in (2,3,4) and st.session_state.get('notice',{}).get('_schema_limits'):
+        st.warning(st.session_state.notice['_schema_limits'])
+
 if screen==2:
     st.subheader('02 / 이 공고의 핵심')
     if 'notice' in st.session_state:
@@ -253,8 +256,8 @@ if screen==2:
                         checked=[{**r,'인용 대조':'본문에서 확인' if evidence(r.get('근거원문',''),r.get('근거페이지',''),st.session_state.pages) else '원문 직접 확인 필요'} for r in entries]
                         st.dataframe(checked,hide_index=True,use_container_width=True)
             if n.get('_workflow_review'):
-                with st.expander('AI가 짚은 불일치와 다음 행동',expanded=True):
-                    st.caption('공고 원문 검토 안내입니다. 개인의 지원 자격을 확정한 결과는 아닙니다.')
+                with st.expander('Studio AI 요약 · 원문 대조 필요' if n.get('_schema_limits') else 'AI가 짚은 불일치와 다음 행동',expanded=not bool(n.get('_schema_limits'))):
+                    st.caption('AI 요약의 날짜·금액·자격은 원문과 대조해주세요. 개인의 지원 자격을 확정한 결과는 아닙니다.')
                     st.markdown(n['_workflow_review'])
         st.caption('다음 단계에서는 이 공고에 필요한 질문만 보여드립니다.')
         st.button('내 상황 입력하기 →',type='primary',on_click=go,args=(3,),use_container_width=True)

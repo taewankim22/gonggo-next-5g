@@ -1,6 +1,7 @@
 """Studio Responses API, based on the official hackathon starter's agent_client.py."""
 import json
 import logging
+import re
 import time
 from openai import OpenAI
 
@@ -9,7 +10,10 @@ class StudioError(RuntimeError):
 
 def decode_output(text):
     try:
+        text=re.sub(r'^```(?:json)?\s*|\s*```$', '', text.strip(), flags=re.I)
         value = json.loads(text)
+        if isinstance(value,str):
+            value=json.loads(re.sub(r'^```(?:json)?\s*|\s*```$', '', value.strip(), flags=re.I))
         # Some workflows wrap the one Extract node in its node name.
         if isinstance(value, dict) and len(value) == 1 and isinstance(next(iter(value.values())), dict):
             value = next(iter(value.values()))
@@ -19,11 +23,32 @@ def decode_output(text):
 
 def decode_steps(steps, fallback=''):
     extracts=[s for s in steps if 'extract' in str(s.get('model','')).lower() and any(c.get('text') for c in s.get('content',[]) if c.get('type')=='output_text')]
-    texts=[c.get('text','') for s in (extracts[-1:] or steps[-1:]) for c in s.get('content',[]) if c.get('type')=='output_text']
-    result=decode_output(''.join(texts) if texts else fallback)
-    if isinstance(result,dict) and '공고유형' in result:
+    texts=[''.join(c.get('text','') for c in s.get('content',[]) if c.get('type')=='output_text') for s in (extracts or steps[-1:])]
+    parts=[decode_output(t) for t in texts if t]
+    if any(not isinstance(p,dict) for p in parts):raise StudioError('Studio 추출 결과가 객체가 아닙니다. 실행 결과를 확인해주세요.')
+    from studio_latest import merge_extracts, is_compact, TYPES
+    result=merge_extracts(parts) if parts else decode_output(fallback)
+    instructs=[c for step in steps if 'instruct' in str(step.get('model','')).lower()
+               for c in step.get('content',[]) if c.get('type')=='output_text' and c.get('text')]
+    if isinstance(result,dict) and 'eligibility_status' in result and instructs:
+        # The latest review workflow moves the final decision to Instruct.
+        # Never quietly show the earlier Extract decision when final JSON fails.
+        reviewed=decode_output(instructs[-1]['text'])
+        def strip_citations(v):
+            if isinstance(v,str):return re.sub(r'【†\d+】|\[\d+\]\(#citation-\d+\)', '', v).strip()
+            if isinstance(v,list):return [strip_citations(x) for x in v]
+            if isinstance(v,dict):return {k:strip_citations(x) for k,x in v.items()}
+            return v
+        return strip_citations(reviewed)
+    if isinstance(result,dict) and ('공고유형' in result or is_compact(result)):
         classified=[c.get('text','').strip().strip('"') for step in steps if 'classify' in str(step.get('model','')).lower() for c in step.get('content',[]) if c.get('type')=='output_text']
         if classified and classified[-1] in ('장학금','대외활동·봉사','대회·공모전','기타'):result['공고유형']=classified[-1]
+        if is_compact(result):
+            labels=[x for x in classified if x in TYPES]
+            if not labels:
+                names={'모집 안내':'모집_안내문','대회 공고문':'대회_공고문','장학금 안내':'장학금 신청','포스터':'대회_포스터'}
+                labels=[label for s in extracts for name,label in names.items() if name in str(s.get('model',''))]
+            result['_classification']=labels[0] if len(set(labels))==1 else ''
         reviews=[]
         for step in steps:
             if 'instruct' not in str(step.get('model','')).lower():continue
@@ -35,7 +60,6 @@ def decode_steps(steps, fallback=''):
                     if isinstance(decoded,str):text=decoded
                 except (ValueError,TypeError):pass
                 # Studio citation identifiers are not page numbers; resolve the supplied mapping.
-                import re
                 extra=c.get('additional_values') or {}
                 if isinstance(extra,str):
                     try:extra=json.loads(extra)

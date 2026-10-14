@@ -99,6 +99,8 @@ def checklist_snapshot(items, states, stage):
 def next_steps(notice, answers, rows, cards=None):
     actions=[]
     def add(title,detail):actions.append({'title':title,'detail':detail})
+    if notice.get('_schema_limits'):
+        add('원문의 제출서류·추가 조건 확인','현재 분석 설정에 제출서류와 조건별 근거 항목이 없습니다. 상세 공고에서 제출물·필수 여부·제출 시점을 확인하세요.')
     conflicts=[c for c in (cards or []) if c['status']=='불일치' and c.get('presence')=='명시']
     if conflicts:add('조건이 다른 항목 확인', ' / '.join(c['title']+': '+c['action'] for c in conflicts))
     independent_conflicts=[r for r in answers.get('independent_conditions',[]) if r['status']=='불일치' and r['verified']]

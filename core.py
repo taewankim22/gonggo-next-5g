@@ -50,7 +50,8 @@ def evidence(quote, page, pages):
 def validate_payload(data, schema):
     if not isinstance(data, dict):
         raise ValueError('분석 결과가 JSON 객체가 아닙니다. 워크플로우 설정을 확인해주세요.')
-    if 'notice_title' in schema['properties'] and '공고유형' in data:
+    from studio_latest import is_compact
+    if 'notice_title' in schema['properties'] and ('공고유형' in data or is_compact(data)):
         from workflow_adapter import adapt_notice
         data=adapt_notice(data)
     clean = {}
@@ -66,7 +67,7 @@ def validate_payload(data, schema):
             clean[key] = value
     if 'question_keys' in clean:
         clean['question_keys'] = [k for k in QUESTION_KEYS if k in clean['question_keys']]
-        for key in ('_structured_notice','_workflow_review','_basic_evidence'):
+        for key in ('_structured_notice','_workflow_review','_basic_evidence','_studio_compact','_schema_limits'):
             if key in data:clean[key]=data[key]
     return clean
 

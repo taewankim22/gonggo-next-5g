@@ -19,6 +19,8 @@ def scoped(row,text='조건',stage='적용단계'):
     return ' · '.join(x for x in (row.get(stage),row.get('적용대상'),row.get(text),row.get('예외')) if x)
 
 def adapt_notice(data):
+    from studio_latest import is_compact, normalize_compact
+    if is_compact(data):data=normalize_compact(data)
     for key in ('공고명','공고유형','주최주관','접수방법','접수링크','접수마감','접수마감설명','활동기간'):
         if not isinstance(data.get(key),str):raise ValueError('분석 결과의 '+key+' 형식을 확인해주세요.')
     tables={key:rows(data,key) for key in ('지원조건','제출서류','일정','혜택','문의처','주의사항')}
@@ -29,6 +31,8 @@ def adapt_notice(data):
     n['_structured_notice']={k:v for k,v in data.items() if not k.startswith('_')}
     n['_workflow_review']=str(data.get('_workflow_review',''))
     n['_basic_evidence']={}
+    for meta in ('_studio_compact','_schema_limits'):
+        if meta in data:n[meta]=data[meta]
     groups={key:[] for key in CATEGORIES}
     profiles=[]
     for row in tables['지원조건']:
@@ -92,7 +96,11 @@ def ground_notice(notice,pages):
     if not notice.get('_structured_notice'):return notice
     import copy
     from core import evidence
-    raw=copy.deepcopy(notice['_structured_notice'])
+    if notice.get('_studio_compact'):
+        from studio_latest import normalize_compact
+        raw=normalize_compact(notice['_studio_compact'],pages)
+    else:
+        raw=copy.deepcopy(notice['_structured_notice'])
     for row in raw.get('지원조건',[]):
         # A quoted number is not enough: total/enrolled terms are not remaining terms.
         # Preserve the full rule as a question, but don't compare it to the user's
