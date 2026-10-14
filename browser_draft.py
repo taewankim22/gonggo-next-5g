@@ -102,6 +102,12 @@ _bridge = st.components.v2.component('gonggo_draft_storage',
 
 def bootstrap():
     """Complete the browser read before any default form can overwrite it."""
+    # Verification tabs never read, save, or delete the user's browser drafts.
+    # Pin the mode for the session so removing the query cannot save test answers.
+    st.session_state.setdefault('_verification_session',st.query_params.get('verification')=='1')
+    if st.session_state['_verification_session']:
+        st.info('검증용 임시 세션입니다. 기존 프로필·답변을 불러오거나 저장하지 않습니다.')
+        return
     ready=st.session_state.get('_draft_loaded',False)
     result=_bridge(key='draft_loader',data={'op':'idle' if ready else 'load'},
                    on_loaded_change=lambda:None)
@@ -124,6 +130,7 @@ def bootstrap():
 
 @st.fragment
 def save_browser():
+    if st.session_state.get('_verification_session'):return
     # IndexedDB acknowledgements must not rerun the whole app: a full rerun
     # interrupts an in-flight Studio poll and discards its completed result.
     payload=snapshot(st.session_state)

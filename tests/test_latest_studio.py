@@ -77,3 +77,17 @@ def test_pinned_versions_match_actual_exports():
         export=json.loads((root/f'agent_configs/{kind}.config{version}.export.json').read_text('utf-8'))['exportedFrom']
         assert settings[f'{kind}_agent_id']==export['workflowId']
         assert settings[f'{kind}_config_id']==str(export['configVer'])
+
+
+def test_verification_session_never_reads_or_writes_existing_browser_drafts(monkeypatch):
+    from types import SimpleNamespace
+    import browser_draft
+    state={}
+    fake=SimpleNamespace(session_state=state,query_params={'verification':'1'},info=lambda message:None)
+    monkeypatch.setattr(browser_draft,'st',fake)
+    def forbidden(**kwargs):raise AssertionError('Must not access existing browser storage')
+    monkeypatch.setattr(browser_draft,'_bridge',forbidden)
+    browser_draft.bootstrap();browser_draft.save_browser()
+    fake.query_params={}
+    browser_draft.bootstrap();browser_draft.save_browser()
+    assert state['_verification_session']
