@@ -93,6 +93,12 @@ def ground_notice(notice,pages):
     import copy
     from core import evidence
     raw=copy.deepcopy(notice['_structured_notice'])
+    for row in raw.get('지원조건',[]):
+        # A quoted number is not enough: total/enrolled terms are not remaining terms.
+        # Preserve the full rule as a question, but don't compare it to the user's
+        # remaining_terms profile unless that specific concept is in the source.
+        if row.get('대조항목')=='잔여학기' and not re.search(r'잔여\s*학기|남은\s*학기|remaining\s+(?:\w+\s+){0,2}(?:semester|term)',row.get('근거원문',''),re.I):
+            row.update(대조항목='',비교방법='검토',기준값='')
     for key in ('지원조건','제출서류','일정','혜택','주의사항'):
         for row in raw.get(key,[]):
             quote=row.get('근거원문','');old=row.get('근거페이지','')
@@ -103,7 +109,8 @@ def ground_notice(notice,pages):
         # Do not present a per-person/team payment when the quoted table is not grounded.
         if row.get('금액범위') in ('개인당','팀당') and not evidence(row.get('근거원문',''),row.get('근거페이지',''),pages):
             row['금액범위']='미확인'
-            row['내용']=row.get('내용','')+' (원문 표의 금액·지급 단위 확인 필요)'
+            suffix=' (원문 표의 금액·지급 단위 확인 필요)'
+            if not row.get('내용','').endswith(suffix):row['내용']=row.get('내용','')+suffix
     raw['_workflow_review']=notice.get('_workflow_review','')
     return adapt_notice(raw)
 

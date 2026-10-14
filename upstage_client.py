@@ -70,6 +70,8 @@ def run_agent(api_key, agent_id, config_id, pdf, filename='notice.pdf', progress
                 file = client.with_options(max_retries=2).files.create(file=(filename, pdf, mime), purpose='user_data', timeout=120)
                 file_id = file.id
                 phase = 'submit'
+                if trace is not None:
+                    trace.update(submission_started=True)
                 response = client.responses.create(model=agent_id, include=['all'],
                     input=[{'role':'user','content':[{'type':'input_file','file_id':file_id}]}],
                     extra_body={'config_id':config_id or '1'}, timeout=timeout)

@@ -1,4 +1,4 @@
-"""Read-only, public document cache. Never receives or stores personal reviews."""
+"""Bundled and live public document cache. Never stores personal reviews."""
 import datetime as dt
 import json
 from pathlib import Path
@@ -11,7 +11,10 @@ from workspaces import seed_basic
 
 def load_catalog(root):
     path=Path(root)/'data/catalog/index.json'
-    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else []
+    bundled=json.loads(path.read_text(encoding='utf-8')) if path.exists() else []
+    from live_catalog import LiveCatalog
+    live=LiveCatalog(root).records()
+    return live+[r for r in bundled if r['id'] not in {x['id'] for x in live}]
 
 def status_label(record,today=None):
     today=today or dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
@@ -20,6 +23,9 @@ def status_label(record,today=None):
 
 def available_record(root,record):
     if record.get('status')!='ready':return None
+    if record.get('storage')=='live':
+        from live_catalog import LiveCatalog
+        return LiveCatalog(root).state(record)
     base=(Path(root)/'data/catalog').resolve()
     try:
         source=(base/record['file']).resolve();extracted=(base/record['analysis']).resolve()

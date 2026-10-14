@@ -102,7 +102,7 @@ with st.sidebar.expander('설정 · 사용 모드와 Upstage 연결', expanded=F
     st.caption('공고 원본·추출 내용·답변·체크는 이 브라우저에 자동 저장합니다. 같은 주소로 다시 접속하면 복원됩니다. API 키와 팀 암호는 브라우저에 저장하지 않습니다. AI 상세 검토 결과도 자동 저장하지 않습니다. 공용 컴퓨터에서는 사용 후 지워주세요.')
     st.button('저장한 공고·답변·체크 지우기',on_click=clear_draft)
     st.caption('다른 기기·브라우저나 다른 사이트 주소로 자동 동기화하지 않습니다. 브라우저 데이터 삭제 시 저장 내용도 사라집니다.')
-    st.caption('파일·답변은 서버의 공용 저장소에 기록하지 않습니다. 실제 분석 시 원본 파일과 답변이 Upstage로 전달됩니다.')
+    st.caption('직접 올린 파일·답변은 서버의 공용 저장소에 기록하지 않습니다. 인터넷에서 가져온 공개 공고의 분석은 공용 목록에 저장합니다. 실제 분석 시 원본 파일과 답변이 Upstage로 전달됩니다.')
     st.caption('조건 검토 도구이며 지원 자격·선발 결과를 확정하지 않습니다.')
 
 if st.session_state.get('last_mode')!=mode:
@@ -115,7 +115,10 @@ if st.session_state.get('last_mode')!=mode:
     st.session_state.pop('_notice_request',None)
     st.session_state.last_mode=mode
 
-if entry(ROOT):
+def discovery_runner(data,filename,info,progress,trace):
+    return run_agent(team.api_key if team else api_key,notice_id,notice_version,data,filename,progress,mime=info['mime'],trace=trace)
+
+if entry(ROOT,{'enabled':mode=='실제 AI 분석' and bool(team or api_key),'agent_id':notice_id,'version':notice_version,'runner':discovery_runner}):
     checkpoint(st.session_state)
     save_browser()
     st.stop()
@@ -202,6 +205,9 @@ if screen==2:
         st.session_state.notice=map_image_page(st.session_state.notice,st.session_state.get('source_info',{}))
         n=st.session_state.notice
         st.write('**'+n['notice_title']+'**')
+        if st.session_state.get('catalog_source',{}).get('coverage_note'):
+            st.info(st.session_state.catalog_source['coverage_note'])
+            st.caption(st.session_state.get('evidence_basis',''))
         if not any(st.session_state.pages):st.warning('대조할 원문 본문이 없습니다. 인용과 조건은 원본 파일에서 직접 확인해주세요.')
         if n['application_deadline']:
             st.caption('공고상 접수 마감: '+n['application_deadline'])

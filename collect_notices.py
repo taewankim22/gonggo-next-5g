@@ -1,4 +1,4 @@
-"""Standalone official-board collector. Produces candidates; never starts agent jobs.
+"""Official-board collector, shared by the CLI and the app's discovery flow.
 
 Adapted from contest-agent's bounded public fetch and URL/link discovery approach.
 Run: python collect_notices.py --output verification/discovery/collected --limit 3
@@ -64,6 +64,8 @@ def collect(candidate,output):
         parser=Links();parser.feed(decode_html(response))
         result.update(html_sha256=digest,status='collected',html_changed=bool(prior) and prior.get('html_sha256')!=digest)
         seen=set()
+        downloads={urljoin(response.url,h) for h,t in parser.links if urlsplit(urljoin(response.url,h)).netloc==urlsplit(url).netloc and 'mode=download' in h}
+        result['attachment_limit_reached']=len(downloads)>5
         for href,title in parser.links:
             link=urljoin(response.url,href)
             if urlsplit(link).netloc!=urlsplit(url).netloc or 'mode=download' not in link or link in seen:continue

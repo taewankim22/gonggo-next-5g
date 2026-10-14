@@ -95,7 +95,7 @@ def test_public_cache_requires_exact_file_and_configuration():
     from catalog import load_catalog
     records=load_catalog(ROOT)
     if not records:return
-    row=records[0]
+    row=next(r for r in records if r['id']=='notice1')
     assert cached_public(ROOT,row['sha256'],'agt_bmPkaZ9TyocTVn7Nw4BEbh','7')
     assert cached_public(ROOT,row['sha256'],'agt_bmPkaZ9TyocTVn7Nw4BEbh','4') is None
     assert cached_public(ROOT,'changed-content','agt_bmPkaZ9TyocTVn7Nw4BEbh','7') is None
@@ -106,7 +106,7 @@ def test_profile_first_numeric_fact_reaches_real_question_and_review(monkeypatch
     monkeypatch.setattr('browser_draft.bootstrap',lambda:None)
     monkeypatch.setattr('browser_draft.save_browser',lambda:None)
     monkeypatch.setattr('team_access.team_gate',lambda *args,**kwargs:(None,None))
-    state=available_record(ROOT,load_catalog(ROOT)[0]);assert state
+    state=available_record(ROOT,next(r for r in load_catalog(ROOT) if r['id']=='notice1'));assert state
     at=AppTest.from_file(str(ROOT/'app.py')).run()
     for key,value in state.items():at.session_state[key]=value
     at.session_state.common_profile={'remaining_terms':fact(1.0,'2026-03')}

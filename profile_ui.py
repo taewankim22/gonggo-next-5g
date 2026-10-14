@@ -99,7 +99,7 @@ def resume_notices():
             if st.button(record['values']['notice']['notice_title'],key='resume_'+key,use_container_width=True):
                 activate(st.session_state,record);st.rerun()
 
-def entry(root):
+def entry(root,connection=None):
     if st.session_state.pop('_navigation_changed',False):
         # A menu selection should reveal the destination on small screens too.
         st.html('''<script>requestAnimationFrame(() => {
@@ -109,7 +109,7 @@ def entry(root):
     view=st.session_state.get('route','review' if st.session_state.get('notice') else 'home')
     if view=='review':return False
     if view=='profile':render_profile()
-    elif view=='catalog':render_catalog(root)
+    elif view=='catalog':render_catalog(root,connection)
     else:
         with st.container(key='home_hero'):
             title,resume=st.columns([3,1.4],vertical_alignment='bottom')
@@ -121,18 +121,20 @@ def entry(root):
     if view in ('profile','catalog'):resume_notices()
     return True
 
-def render_catalog(root):
+def render_catalog(root,connection=None):
     from catalog import load_catalog,card_review,available_record,status_label
     st.header('나에게 맞는 공고 보기')
-    st.caption('공식 원문을 확보한 제한된 공개 목록입니다. 전체 장학금 검색이나 지원 자격 확정이 아닙니다. 목록 조회·필터는 AI를 호출하지 않습니다.')
+    from discovery_ui import render_discovery
+    render_discovery(root,connection)
+    st.subheader('분석한 공고 목록')
     catalog=load_catalog(root)
     if not catalog:st.info('아직 원문 분석을 마친 공고가 없습니다.');return
-    kind=st.selectbox('종류',['전체']+sorted({r['kind'] for r in catalog}))
-    status=st.selectbox('접수 상태',['전체','마감 전 · 시작일 확인','과거 검증 사례','접수 상태 확인 필요'])
-    interest=st.text_input('관심 분야 검색',placeholder='교육, 장학, 공모전 등')
-    st.caption('목록 순서는 마감일 기준이며, 미확인 항목 수로 지원 가능성을 계산하지 않습니다.')
+    kind=st.selectbox('종류',['전체']+sorted({r['kind'] for r in catalog}),key='catalog_kind')
+    status=st.selectbox('접수 상태',['전체','마감 전 · 시작일 확인','과거 검증 사례','접수 상태 확인 필요'],key='catalog_status')
+    interest=st.text_input('관심 분야 검색',placeholder='분석한 목록에서 교육, 장학, 공모전 등',key='catalog_search')
+    st.caption('새로 분석한 공고를 먼저 표시합니다. 미확인 항목 수로 지원 가능성을 계산하지 않습니다.')
     count=0
-    for record in sorted(catalog,key=lambda r:r.get('deadline',''),reverse=True):
+    for record in sorted(catalog,key=lambda r:(r.get('storage')=='live',r.get('analyzed_at',''),r.get('deadline','')),reverse=True):
         label=status_label(record)
         if kind!='전체' and kind!=record['kind']:continue
         if status!='전체' and status!=label:continue
@@ -141,6 +143,9 @@ def render_catalog(root):
         with st.container(border=True):
             st.subheader(record['title']);st.caption(label+' · 마감 '+(record.get('deadline') or '미확인'))
             st.link_button('공식 원문',record['source_url']);st.caption('원문 확인 '+record['checked_at'])
+            if record.get('storage')=='live':
+                st.write('**인터넷에서 가져온 공고 · AI 분석**')
+                st.info(record['coverage_note'])
             if not available_record(root,record):
                 st.warning('원문 확보 또는 분석 미완료 · 조건 추천에서 제외했습니다.');continue
             result=card_review(root,record,st.session_state.get('common_profile',{}))
@@ -155,3 +160,4 @@ def render_catalog(root):
                 state=available_record(root,record)
                 saved=st.session_state.get('workspaces',{}).get(state['source_hash'])
                 activate(st.session_state,saved or single_snapshot(state));st.rerun()
+    if not count:st.info('현재 필터에 맞는 분석 공고가 없습니다. 검색어 또는 접수 상태를 바꿔보세요.')
