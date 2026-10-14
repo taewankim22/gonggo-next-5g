@@ -9,6 +9,50 @@ from web_notice import SOURCE_NAME, prepare_article
 
 
 def render_discovery(root, connection):
+    from discovery_flow import refresh_latest
+    with st.container(border=True):
+        st.subheader('최신 공고 찾기')
+        st.write('**저장한 내 정보**로 조건을 대조합니다. 비어 있는 정보는 확인 필요로 남깁니다.')
+        st.write('수집 출처: '+SOURCE_NAME+' · 첫 페이지')
+        with st.expander('검색 범위 · 분석 방식'):
+            limit=st.selectbox('한 번에 확인할 최신 공고 수',[3,1,5,10],key='discovery_batch_size',format_func=lambda n:f'{n}개 공고')
+            st.write('선택한 공고의 본문·포스터와 지원되는 첨부(최대 5개)를 자동 분석합니다. 문서 수에 따라 몇 분 걸릴 수 있습니다. 같은 원문·설정의 완료 분석은 재사용합니다.')
+            st.write('내 정보는 수집·분석 서버의 공개 목록에 저장하지 않습니다. 프로필 수정은 추가 AI 호출 없이 순위에 반영됩니다. 전국 공고 통합 검색은 아닙니다.')
+            st.link_button('연결된 공식 게시판',BOARD)
+        enabled=bool(connection and connection.get('enabled'))
+        pending=st.session_state.pop('_discovery_auto_requested',False)
+        clicked=st.button('최신 공고 찾기',key='discovery_latest',type='primary',disabled=not enabled,use_container_width=True)
+        if not enabled:st.info('설정에서 실제 AI 분석 모드와 Upstage 연결을 확인해주세요.')
+        if (clicked or pending) and enabled:
+            st.session_state.pop('_discovery_batch_summary',None)
+            progress=st.empty()
+            try:
+                summary=refresh_latest(root,connection,limit,progress.info)
+                st.session_state['_discovery_batch_summary']=summary
+                st.session_state['catalog_kind']='전체';st.session_state['catalog_status']='전체';st.session_state['catalog_search']=''
+            except (ValueError,OSError,StudioError):
+                st.error('최신 공고를 가져오지 못했습니다. 기존 목록은 유지됩니다. 잠시 후 다시 시도해주세요.')
+            finally:progress.empty()
+        summary=st.session_state.get('_discovery_batch_summary')
+        if summary:
+            message=f'공고 {summary["selected"]}개 확인 · 새 분석 {summary["analyzed"]}문서 · 재사용 {summary["reused"]}문서'
+            if summary['failed']:st.warning(message+f' · 미완료 {summary["failed"]}건')
+            elif any(not n['complete'] for n in summary['notices']):st.warning(message+' · 일부 첨부는 원문 확인 필요')
+            else:st.success(message+' · 내 정보로 목록을 정렬했습니다.')
+            if summary['found']>summary['selected']:st.write(f'게시판에서 찾은 {summary["found"]}개 중 최신 {summary["selected"]}개를 확인했습니다. 검색 범위에서 개수를 바꿀 수 있습니다.')
+            if not summary['found']:st.info('가져올 공고가 없습니다. 공식 게시판을 확인해주세요.')
+            with st.expander('이번 검색의 분석 내역'):
+                for notice in summary['notices']:
+                    st.write('**'+notice['title']+'**')
+                    for doc in notice['documents']:
+                        st.write(doc['name']+' · '+('분석 완료' if doc['status']=='ready' else '확인 필요'))
+                        if doc.get('error'):st.warning(doc['error'])
+                    for warning in notice['warnings']:st.warning(warning)
+    with st.expander('공고·문서를 직접 골라 분석하기'):
+        render_manual_discovery(root,connection)
+
+
+def render_manual_discovery(root, connection):
     with st.container(border=True):
         st.subheader('인터넷에서 새 공고 가져오기')
         st.write('연결된 출처: **'+SOURCE_NAME+'**')

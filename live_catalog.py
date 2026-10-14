@@ -27,6 +27,7 @@ class LiveCatalog:
         with self.connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, record TEXT NOT NULL, analysis TEXT NOT NULL, document BLOB NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, busy INTEGER NOT NULL, updated REAL NOT NULL, trace TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS scans (url TEXT PRIMARY KEY, manifest TEXT NOT NULL)')
 
     @contextmanager
     def connect(self):
@@ -40,6 +41,16 @@ class LiveCatalog:
     def records(self):
         with self.connect() as db:
             return [json.loads(r[0]) for r in db.execute('SELECT record FROM records ORDER BY rowid DESC')]
+
+    def scans(self):
+        with self.connect() as db:
+            return {r[0]:json.loads(r[1]) for r in db.execute('SELECT url,manifest FROM scans')}
+
+    def save_scan(self, manifest):
+        # Only collector-owned public metadata, never a session/profile snapshot.
+        with self.connect() as db:
+            db.execute('INSERT OR REPLACE INTO scans VALUES (?,?)',
+                       (manifest['url'],json.dumps(manifest,ensure_ascii=False)))
 
     def state(self, record):
         with self.connect() as db:

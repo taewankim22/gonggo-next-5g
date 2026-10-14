@@ -118,9 +118,13 @@ if st.session_state.get('last_mode')!=mode:
 def discovery_runner(data,filename,info,progress,trace):
     return run_agent(team.api_key if team else api_key,notice_id,notice_version,data,filename,progress,mime=info['mime'],trace=trace)
 
-if entry(ROOT,{'enabled':mode=='실제 AI 분석' and bool(team or api_key),'agent_id':notice_id,'version':notice_version,'runner':discovery_runner}):
+if st.session_state.get('route')=='catalog':
+    # Render browser persistence before a potentially long discovery batch.
     checkpoint(st.session_state)
     save_browser()
+if entry(ROOT,{'enabled':mode=='실제 AI 분석' and bool(team or api_key),'agent_id':notice_id,'version':notice_version,'runner':discovery_runner}):
+    checkpoint(st.session_state)
+    if st.session_state.get('route')!='catalog':save_browser()
     st.stop()
 
 if 'notice' not in st.session_state:st.session_state.screen=1

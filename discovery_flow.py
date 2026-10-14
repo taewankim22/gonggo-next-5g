@@ -1,0 +1,58 @@
+"""User-triggered public collection and sequential analysis; profiles stay local."""
+from pathlib import Path
+from core import fingerprint
+from collect_notices import discover
+from live_catalog import LiveCatalog, analyze_public, now_iso
+from upstage_client import StudioError
+from web_notice import prepare_article, article_url
+
+
+def refresh_latest(root, connection, limit=3, progress=None):
+    if not connection or not connection.get('enabled'):
+        raise ValueError('실제 AI 분석 모드와 Upstage 연결을 확인해주세요.')
+    if limit not in (1,3,5,10):raise ValueError('검색 범위를 다시 선택해주세요.')
+    def report(text):
+        if progress:progress(text)
+    report('공식 게시판에서 최신 공고를 가져오는 중…')
+    candidates=discover()
+    cache=LiveCatalog(root)
+    summary=dict(checked_at=now_iso(),found=len(candidates),selected=min(limit,len(candidates)),
+                 analyzed=0,reused=0,failed=0,notices=[])
+    config={'agent_id':connection['agent_id'],'config_id':str(connection['version'])}
+    for position,candidate in enumerate(candidates[:limit],1):
+        report(f'{position}/{summary["selected"]} 공고 · 본문과 첨부를 가져오는 중…')
+        url=article_url(candidate['url'])
+        manifest=dict(url=url,title=candidate['title'],checked_at=now_iso(),config=config,
+                      documents=[],warnings=[],complete=False)
+        try:
+            article=prepare_article(candidate,Path(root)/'runtime/collected')
+        except (ValueError,OSError,StudioError):
+            manifest['warnings']=['최신 원문을 가져오지 못했습니다. 이전 분석은 최신 여부 확인이 필요합니다.']
+            manifest['fetch_failed']=True
+            cache.save_scan(manifest);summary['failed']+=1;summary['notices'].append(manifest)
+            continue
+        manifest.update(title=article['title'],checked_at=article['checked_at'],warnings=list(article['warnings']))
+        if article.get('attachment_limit_reached'):
+            manifest['warnings'].append('첨부는 처음 5개까지 수집했습니다. 나머지는 원문에서 확인해주세요.')
+        manifest['documents']=[dict(url=d['document_url'],name=d['name'],sha256=fingerprint(d['data']),status='pending')
+                               for d in article['documents']]
+        # Persist the current inventory before starting any paid call. A changed
+        # or unfinished document must not silently reuse an older verdict.
+        cache.save_scan(manifest)
+        for index,doc in enumerate(manifest['documents']):
+            prefix=f'{position}/{summary["selected"]} 공고 · 문서 {index+1}/{len(manifest["documents"])}'
+            report(prefix+' · '+doc['name'])
+            try:
+                record,reused=analyze_public(root,article,index,connection['agent_id'],connection['version'],
+                    connection['runner'],lambda message:report(prefix+' · '+message))
+                doc.update(status='ready',record_id=record['id'])
+                summary['reused' if reused else 'analyzed']+=1
+            except (ValueError,StudioError) as exc:
+                doc.update(status='failed',error=str(exc));summary['failed']+=1
+            except OSError:
+                doc.update(status='failed',error='문서 저장 오류입니다. 다시 검색하면 완료된 분석을 재사용합니다.')
+                summary['failed']+=1
+            cache.save_scan(manifest)
+        manifest['complete']=not manifest['warnings'] and all(d['status']=='ready' for d in manifest['documents'])
+        cache.save_scan(manifest);summary['notices'].append(manifest)
+    return summary

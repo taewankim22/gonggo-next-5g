@@ -40,9 +40,14 @@ def render_profile():
         with st.expander('장학 조건에 필요할 때 · 선택 정보'):
             st.caption('공고에 필요한 경우에만 입력하세요. 대상 여부는 증빙 준비 상태와 다릅니다.')
             for key in ('income_band','social_support'):draw(key)
-        if st.form_submit_button('내 정보 저장',type='primary'):
+        saved=st.form_submit_button('내 정보 저장')
+        search=st.form_submit_button('저장하고 최신 공고 찾기',type='primary')
+        if saved or search:
             st.session_state.common_profile=clean_profile(draft);refresh_profile(st.session_state)
             st.success('저장했습니다. 이번 공고에서 직접 수정한 답변은 유지합니다.')
+            if search:
+                route('catalog');st.session_state['_discovery_auto_requested']=True
+                st.rerun()
     if st.button('공통 프로필만 삭제'):
         st.session_state.common_profile={};refresh_profile(st.session_state)
         for key in list(st.session_state):
@@ -123,6 +128,7 @@ def entry(root,connection=None):
 
 def render_catalog(root,connection=None):
     from catalog import load_catalog,card_review,available_record,status_label
+    from catalog_ranking import personalized_catalog
     st.header('나에게 맞는 공고 보기')
     from discovery_ui import render_discovery
     render_discovery(root,connection)
@@ -132,9 +138,13 @@ def render_catalog(root,connection=None):
     kind=st.selectbox('종류',['전체']+sorted({r['kind'] for r in catalog}),key='catalog_kind')
     status=st.selectbox('접수 상태',['전체','마감 전 · 시작일 확인','과거 검증 사례','접수 상태 확인 필요'],key='catalog_status')
     interest=st.text_input('관심 분야 검색',placeholder='분석한 목록에서 교육, 장학, 공모전 등',key='catalog_search')
-    st.caption('새로 분석한 공고를 먼저 표시합니다. 미확인 항목 수로 지원 가능성을 계산하지 않습니다.')
+    st.write('**내 정보 기준 우선순위** · 마감 전·일정 미확인 공고 중 확인된 자격 일치를 먼저 보여줍니다. 미입력 수는 점수나 불일치로 바꾸지 않습니다.')
+    if not any(f.get('state')=='known' for f in st.session_state.get('common_profile',{}).values()):
+        st.info('저장된 내 정보가 없습니다. 조건은 확인 필요로 표시됩니다.')
+    st.button('내 정보 수정',on_click=route,args=('profile',),key='catalog_edit_profile')
     count=0
-    for record in sorted(catalog,key=lambda r:(r.get('storage')=='live',r.get('analyzed_at',''),r.get('deadline','')),reverse=True):
+    for group in personalized_catalog(root,catalog,st.session_state.get('common_profile',{})):
+        record=group['record']
         label=status_label(record)
         if kind!='전체' and kind!=record['kind']:continue
         if status!='전체' and status!=label:continue
@@ -145,19 +155,30 @@ def render_catalog(root,connection=None):
             st.link_button('공식 원문',record['source_url']);st.caption('원문 확인 '+record['checked_at'])
             if record.get('storage')=='live':
                 st.write('**인터넷에서 가져온 공고 · AI 분석**')
-                st.info(record['coverage_note'])
-            if not available_record(root,record):
+                st.write(f'이 공고에서 분석한 문서 {len(group["documents"])}개 · 각 문서의 조건을 함께 대조합니다.')
+            for caution in group['cautions']:st.warning(caution)
+            if not group['documents']:
                 st.warning('원문 확보 또는 분석 미완료 · 조건 추천에서 제외했습니다.');continue
-            result=card_review(root,record,st.session_state.get('common_profile',{}))
-            for title,key in [('확인된 일치','matches'),('추가 확인','unknowns'),('확인된 불일치','conflicts')]:
-                st.write('**'+title+'** · '+(' / '.join(dict.fromkeys(r['label'] for r in result[key])) or '없음'))
+            st.write('**'+group['priority']['label']+'** · '+' / '.join(group['priority']['reasons']))
+            result=group['result']
+            for title,key in [('확인된 일치','matches'),('확인 필요','unknowns')]:
+                labels=list(dict.fromkeys(r['label'] for r in result[key]))
+                summary=' / '.join(labels[:3])+ (f' 외 {len(labels)-3}개 · 아래 근거에서 확인' if len(labels)>3 else '')
+                st.write('**'+title+'** · '+(summary or '없음'))
+            for title,category in [('지원 자격 불일치','eligibility'),('우대 조건 불일치','preference')]:
+                conflicts=[r['label'] for r in result['conflicts'] if r.get('category')==category]
+                st.write('**'+title+'** · '+(' / '.join(dict.fromkeys(conflicts)) or '없음'))
             st.caption('확인된 불일치가 없어도 전체 지원 자격을 충족한다는 뜻은 아닙니다. 추출되지 않은 조건은 원문에서 확인하세요.')
             with st.expander('추천 이유와 원문 근거'):
                 for row in result['rows']:
-                    st.write(row['label']+' · '+row['status']+' · '+row['reason']);st.text(row['quote']);st.caption(str(row['page'])+'쪽')
+                    category='우대 조건' if row.get('category')=='preference' else '지원 자격' if row.get('category')=='eligibility' else '추가 조건'
+                    st.write(category+' · '+row['label']+' · '+row['status']+' · '+row['reason']);st.text(row['quote']);st.caption(row.get('document_name','')+' · '+str(row['page'])+'쪽')
+            selected=record
+            if len(group['documents'])>1:
+                selected=st.selectbox('자세히 검토할 문서',group['documents'],format_func=lambda r:r.get('document_name',r['title']),key='catalog_document_'+record['id'])
             if st.button('이 공고 검토하기',key='catalog_'+record['id'],type='primary'):
                 from browser_draft import single_snapshot
-                state=available_record(root,record)
+                state=available_record(root,selected)
                 saved=st.session_state.get('workspaces',{}).get(state['source_hash'])
                 activate(st.session_state,saved or single_snapshot(state))
                 # Keep saved personal answers, while using the current public
