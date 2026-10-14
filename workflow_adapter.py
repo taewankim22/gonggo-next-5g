@@ -122,6 +122,8 @@ def ground_notice(notice,pages):
             row['금액범위']='미확인'
             suffix=' (원문 표의 금액·지급 단위 확인 필요)'
             if not row.get('내용','').endswith(suffix):row['내용']=row.get('내용','')+suffix
+    from deadline_guard import guard_deadline
+    guard_deadline(raw,pages)
     raw['_workflow_review']=notice.get('_workflow_review','')
     return adapt_notice(raw)
 

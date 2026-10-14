@@ -35,7 +35,7 @@ def test_expired_goes_last_and_interest_is_not_eligibility():
 def connection(runner=result):return dict(enabled=True,agent_id='agt_test',version='13',runner=runner)
 
 def test_batch_analyzes_all_documents_continues_failure_reuses_completed(monkeypatch,tmp_path):
-    a=article();a['documents'].append({**a['documents'][0],'name':'첨부.pdf','document_url':URL+'&attachNo=1','filename':'attachment.pdf'})
+    a=article();a['documents'].append({**a['documents'][0],'data':a['documents'][0]['data']+b'\n','name':'첨부.pdf','document_url':URL+'&attachNo=1','filename':'attachment.pdf'})
     b=deepcopy(a);b.update(url=URL.replace('123','124'),title='가져오기 실패')
     c=deepcopy(a);c.update(url=URL.replace('123','125'),title='다음 공고')
     monkeypatch.setattr('discovery_flow.discover',lambda:[a,b,c])
@@ -49,12 +49,12 @@ def test_batch_analyzes_all_documents_continues_failure_reuses_completed(monkeyp
         if name=='attachment.pdf':raise ValueError('첨부 분석 실패')
         return result()
     summary=refresh_latest(tmp_path,connection(runner),3)
-    assert summary['analyzed']==2 and summary['failed']==3
+    assert summary['analyzed']==1 and summary['reused']==1 and summary['failed']==3
     assert all(not n['complete'] for n in summary['notices'])
     assert len(LiveCatalog(tmp_path).records())==2
     again=refresh_latest(tmp_path,connection(runner),3)
     assert again['reused']==2 and again['analyzed']==0
-    assert calls.count('article.pdf')==2
+    assert calls.count('article.pdf')==1
 
 def test_disabled_connection_never_fetches(monkeypatch,tmp_path):
     monkeypatch.setattr('discovery_flow.discover',lambda:pytest.fail('No network'))
@@ -78,7 +78,11 @@ def test_documents_grouped_by_notice_and_date_disagreement_is_unknown(tmp_path):
     s,_=analyze_public(tmp_path,a,0,'agt_test','13',result)
     s['deadline']='2026-11-30'
     with LiveCatalog(tmp_path).connect() as db:
-        db.execute('UPDATE records SET record=? WHERE id=?',(json.dumps(s),s['id']))
+        analysis=json.loads(db.execute('SELECT analysis FROM records WHERE id=?',(s['id'],)).fetchone()[0])
+        analysis['notice']['_structured_notice']['접수마감']='2026-11-30'
+        analysis['notice']['_structured_notice']['접수마감설명']='접수 마감 2026-11-30'
+        analysis['pages'].append('접수 마감 2026-11-30')
+        db.execute('UPDATE records SET record=?,analysis=? WHERE id=?',(json.dumps(s),json.dumps(analysis),s['id']))
     groups=personalized_catalog(tmp_path,load_catalog(tmp_path),{})
     assert len(groups)==1 and len(groups[0]['documents'])==2
     assert groups[0]['record']['deadline']=='' and any('마감일이 다릅니다' in c for c in groups[0]['cautions'])
@@ -117,8 +121,14 @@ def test_save_and_search_ui_one_action_keeps_private_data_out_of_catalog(monkeyp
     monkeypatch.setattr(live_catalog,'LiveCatalog',lambda root:original(tmp_path))
     monkeypatch.setattr('discovery_flow.LiveCatalog',lambda root:original(tmp_path))
     monkeypatch.setattr('catalog_ranking.LiveCatalog',lambda root:original(tmp_path))
-    monkeypatch.setattr('discovery_flow.discover',lambda:[{'url':URL,'title':'실제 스키마 테스트'}])
-    monkeypatch.setattr('discovery_flow.prepare_article',lambda *args:article())
+    from national_search import DiscoveryStore,SearchConfig
+    ds=DiscoveryStore(tmp_path);ds.remember([{'url':URL,'title':'실제 스키마 테스트','source_name':'테스트'}])
+    monkeypatch.setattr('discovery_ui.DiscoveryStore',lambda root:ds)
+    monkeypatch.setattr('discovery_flow.LiveCatalog',lambda root:original(tmp_path))
+    monkeypatch.setattr('discovery_ui.LiveCatalog',lambda root:original(tmp_path))
+    monkeypatch.setattr('discovery_ui.discover_nationwide',lambda *args: (ds.items(),dict(found=1,queries_completed=54,queries_total=54,query_cache_hits=0,sources=[],errors=[])))
+    monkeypatch.setattr('search_ui.render_search_settings',lambda:SearchConfig('test'))
+    monkeypatch.setattr('nationwide_notice.prepare_public_article',lambda *args:article())
     calls=[]
     def run(*args,**kwargs):calls.append(1);return result()
     monkeypatch.setattr('upstage_client.run_agent',run)

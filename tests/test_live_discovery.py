@@ -39,6 +39,7 @@ def test_real_schema_publishes_across_instances_and_deduplicates(tmp_path):
 def test_failure_never_publishes_or_removes_existing_notice(tmp_path):
     r,_=analyze_public(tmp_path,article(),0,'agt_test','13',result)
     a=article();a['url']=URL.replace('123','124')
+    a['documents'][0]['data']+=b'\n'
     with pytest.raises(ValueError):analyze_public(tmp_path,a,0,'agt_test','13',lambda *args:{'bad':'json'})
     assert LiveCatalog(tmp_path).records()==[r]
 
@@ -144,8 +145,17 @@ def test_ui_fetch_prepare_analyze_filter_failure_without_background_calls(monkey
     # Keep this integration test's shared storage separate from the developer's cache.
     original=LiveCatalog
     monkeypatch.setattr(live_catalog,'LiveCatalog',lambda root:original(tmp_path))
-    monkeypatch.setattr('discovery_ui.discover',lambda:[{'title':'테스트 공고','url':URL}])
-    monkeypatch.setattr('discovery_ui.prepare_article',lambda *args:article())
+    from national_search import DiscoveryStore
+    ds=DiscoveryStore(tmp_path)
+    monkeypatch.setattr('discovery_ui.DiscoveryStore',lambda root:ds)
+    monkeypatch.setattr('discovery_ui.LiveCatalog',lambda root:original(tmp_path))
+    monkeypatch.setattr('discovery_flow.LiveCatalog',lambda root:original(tmp_path))
+    monkeypatch.setattr('catalog_ranking.LiveCatalog',lambda root:original(tmp_path))
+    def discover(*args):
+        ds.remember([{'title':'테스트 공고','url':URL,'source_name':'테스트'}])
+        return ds.items(),dict(found=1,queries_completed=0,queries_total=54,query_cache_hits=0,sources=[],errors=[])
+    monkeypatch.setattr('discovery_ui.discover_nationwide',discover)
+    monkeypatch.setattr('nationwide_notice.prepare_public_article',lambda *args:article())
     calls=[]
     def runner(*args,**kwargs):calls.append(1);return result()
     monkeypatch.setattr('upstage_client.run_agent',runner)
@@ -154,7 +164,6 @@ def test_ui_fetch_prepare_analyze_filter_failure_without_background_calls(monkey
     assert not at.exception and not calls
     next(t for t in at.text_input if t.label=='Upstage API 키').input('test-only').run()
     at.button(key='discovery_fetch').click().run()
-    at.button(key='discovery_prepare').click().run()
     assert not calls
     at.button(key='discovery_analyze').click().run()
     assert not at.exception and calls==[1] and at.success

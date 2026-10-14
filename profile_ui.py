@@ -152,7 +152,9 @@ def render_catalog(root,connection=None):
         count+=1
         with st.container(border=True):
             st.subheader(record['title']);st.caption(label+' · 마감 '+(record.get('deadline') or '미확인'))
-            st.link_button('공식 원문',record['source_url']);st.caption('원문 확인 '+record['checked_at'])
+            st.link_button('수집 출처 원문',record['source_url']);st.caption('원문 확인 '+record['checked_at'])
+            if record.get('source_kind'):st.write(record['source_kind'])
+            for alias in group.get('source_aliases',[]):st.link_button('동일 문서를 게시한 다른 출처',alias)
             if record.get('storage')=='live':
                 st.write('**인터넷에서 가져온 공고 · AI 분석**')
                 st.write(f'이 공고에서 분석한 문서 {len(group["documents"])}개 · 각 문서의 조건을 함께 대조합니다.')

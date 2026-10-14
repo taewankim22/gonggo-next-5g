@@ -5,8 +5,8 @@ import http.client
 import ipaddress
 import socket
 import ssl
-from dataclasses import dataclass
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from dataclasses import dataclass, field
+from urllib.parse import urljoin, urlsplit, urlunsplit, quote
 from urllib.robotparser import RobotFileParser
 
 class AgentError(ValueError):
@@ -22,6 +22,7 @@ class Response:
     body: bytes
     content_type: str
     status: int
+    headers: dict = field(default_factory=dict)
 
 
 def canonical_url(url):
@@ -37,7 +38,8 @@ def canonical_url(url):
         raise AgentError("잘못된 URL 포트입니다.") from exc
     if port and port not in (80, 443):
         raise AgentError("웹 포트 80/443만 사용할 수 있습니다.")
-    return urlunsplit((p.scheme, p.netloc.lower(), p.path or "/", p.query, ""))
+    return urlunsplit((p.scheme, p.netloc.lower(), quote(p.path or "/",safe="/%:@!$&'()*+,;=-._~"),
+                       quote(p.query,safe="/%?:@!$&'()*+,;=-._~"), ""))
 
 
 def public_address(host, port):
@@ -105,5 +107,5 @@ def fetch(url, *, respect_robots=True, limit=MAX_BYTES):
             continue
         if status != 200:
             raise AgentError(f"HTTP {status}: 접근 제한·오류. 반복 우회하지 않고 공식 API/브라우저 확인이 필요합니다.")
-        return Response(current, body, headers.get("content-type", ""), status)
+        return Response(current, body, headers.get("content-type", ""), status, headers)
     raise AgentError("리디렉션 횟수 제한을 초과했습니다.")

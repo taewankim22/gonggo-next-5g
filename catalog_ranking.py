@@ -71,4 +71,18 @@ def personalized_catalog(root, records, profile, today=None):
         order=priority(representative,review,profile,today)
         if not valid:order.update(label='분석 확인 필요',key=(True,True,True,True,True,True,'9999-12-31',representative['title']))
         out.append(dict(record=representative,documents=valid,result=review,priority=order,cautions=cautions))
-    return sorted(out,key=lambda x:x['priority']['key'])
+    # Collapse proven complete reposts only. A title alone, shared blank form or
+    # overlapping attachment cannot establish that two notices are the same.
+    unique=[];identical={}
+    for group in out:
+        record=group['record'];scan=scans.get(record['source_url'],{})
+        signature=None
+        if scan.get('complete') and group['documents'] and not group['cautions']:
+            signature=(normalize(record['title']),tuple(sorted((r['sha256'],str(r.get('config'))) for r in group['documents'])))
+        if signature and signature in identical:
+            previous=identical[signature]
+            previous.setdefault('source_aliases',[]).append(record['source_url'])
+        else:
+            unique.append(group)
+            if signature:identical[signature]=group
+    return sorted(unique,key=lambda x:x['priority']['key'])

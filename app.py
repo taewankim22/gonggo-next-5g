@@ -57,6 +57,9 @@ def clear_answers():
 with st.sidebar:
     navigation()
 
+from search_ui import render_search_settings
+national_search_config=render_search_settings()
+
 with st.sidebar.expander('설정 · 사용 모드와 Upstage 연결', expanded=False):
     st.markdown('### 공고다음')
     st.caption('5G · 나의 다음 기회')
@@ -122,7 +125,7 @@ if st.session_state.get('route')=='catalog':
     # Render browser persistence before a potentially long discovery batch.
     checkpoint(st.session_state)
     save_browser()
-if entry(ROOT,{'enabled':mode=='실제 AI 분석' and bool(team or api_key),'agent_id':notice_id,'version':notice_version,'runner':discovery_runner}):
+if entry(ROOT,{'enabled':mode=='실제 AI 분석' and bool(team or api_key),'agent_id':notice_id,'version':notice_version,'runner':discovery_runner,'search_config':national_search_config}):
     checkpoint(st.session_state)
     if st.session_state.get('route')!='catalog':save_browser()
     st.stop()

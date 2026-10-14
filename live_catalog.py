@@ -28,6 +28,7 @@ class LiveCatalog:
             db.execute('CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, record TEXT NOT NULL, analysis TEXT NOT NULL, document BLOB NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, busy INTEGER NOT NULL, updated REAL NOT NULL, trace TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS scans (url TEXT PRIMARY KEY, manifest TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS content_analyses (id TEXT PRIMARY KEY, analysis TEXT NOT NULL)')
 
     @contextmanager
     def connect(self):
@@ -40,7 +41,14 @@ class LiveCatalog:
 
     def records(self):
         with self.connect() as db:
-            return [json.loads(r[0]) for r in db.execute('SELECT record FROM records ORDER BY rowid DESC')]
+            saved=db.execute('SELECT record,analysis FROM records ORDER BY rowid DESC').fetchall()
+        results=[]
+        for record,analysis in saved:
+            r=json.loads(record);a=json.loads(analysis)
+            # Apply current evidence rules to old cached deadlines as well.
+            r['deadline']=ground_notice(a['notice'],a['pages']).get('application_deadline','')
+            results.append(r)
+        return results
 
     def scans(self):
         with self.connect() as db:
@@ -93,6 +101,18 @@ class LiveCatalog:
         with self.connect() as db:
             db.execute('INSERT OR REPLACE INTO records VALUES (?,?,?,?)',
                        (record['id'],json.dumps(record,ensure_ascii=False),json.dumps(analysis,ensure_ascii=False),data))
+            key=fingerprint([record['sha256'],record['config']])
+            db.execute('INSERT OR REPLACE INTO content_analyses VALUES (?,?)',(key,json.dumps(analysis,ensure_ascii=False)))
+
+    def content_analysis(self, sha, config):
+        with self.connect() as db:
+            row=db.execute('SELECT analysis FROM content_analyses WHERE id=?',(fingerprint([sha,config]),)).fetchone()
+            if row:return json.loads(row[0])
+            # Reuse pre-migration completed analyses too; exact bytes + pinned config only.
+            for record,analysis in db.execute('SELECT record,analysis FROM records'):
+                r=json.loads(record)
+                if r.get('sha256')==sha and r.get('config')==config:return json.loads(analysis)
+        return None
 
 
 class SavedTrace(dict):
@@ -113,22 +133,21 @@ def analyze_public(root, article, document_index, agent_id, version, runner, pro
     sha = fingerprint(data)
     identity = 'web_' + fingerprint([article['url'],doc['document_url']])[:24]
     config = {'agent_id':agent_id,'config_id':str(version)}
-    job = fingerprint([identity,sha,config])
+    job = fingerprint([sha,config])
     cache = LiveCatalog(root)
-    for r in cache.records():
-        if r['id'] == identity and r['sha256'] == sha and r['config'] == config:
-            if cache.state(r):
-                r['checked_at'] = article['checked_at']
-                with cache.connect() as db:
-                    db.execute('UPDATE records SET record=? WHERE id=?', (json.dumps(r,ensure_ascii=False),identity))
-                return r, True
-    initial = cache.claim(job)
+    cached=cache.content_analysis(sha,config)
+    initial = cache.claim(job) if not cached else {}
+    claimed=not bool(cached)
     trace = SavedTrace(initial, lambda t:cache.save_trace(job,t))
     try:
-        raw = runner(data, doc['filename'], info, progress, trace)
-        notice = validate_payload(raw, notice_schema())
-        ocr = parse_pages(trace.get('steps',[]))
-        pages = ocr if any(ocr) else info['pages']
+        cached=cached or cache.content_analysis(sha,config)
+        if cached:
+            notice=cached['notice'];pages=cached['pages'];trace=cached['notice_trace']
+        else:
+            raw = runner(data, doc['filename'], info, progress, trace)
+            notice = validate_payload(raw, notice_schema())
+            ocr = parse_pages(trace.get('steps',[]))
+            pages = ocr if any(ocr) else info['pages']
         if not any(pages) or not notice.get('notice_title','').strip():
             raise ValueError('공고 제목 또는 근거 본문을 읽지 못했습니다. 목록에 게시하지 않았습니다.')
         notice = map_image_page(ground_notice(notice,pages),info)
@@ -137,16 +156,20 @@ def analyze_public(root, article, document_index, agent_id, version, runner, pro
         if remaining or article.get('attachment_limit_reached'):
             coverage += ' 다른 본문·첨부는 별도 확인이 필요합니다.'
         coverage += ' AI 분석 결과이며 전체 자격 충족을 확정하지 않습니다.'
+        analyzed_at=cached.get('analyzed_at','') if cached else ''
+        if not analyzed_at:analyzed_at=now_iso()
         record = dict(id=identity, title=article['title'], kind=notice.get('notice_type') or '기타',
                       deadline=notice.get('application_deadline',''), source_url=article['url'],
                       document_url=doc['document_url'], document_name=doc['name'], filename=doc['filename'],
-                      checked_at=article['checked_at'], analyzed_at=now_iso(), sha256=sha, status='ready',
+                      checked_at=article['checked_at'], analyzed_at=analyzed_at, sha256=sha, status='ready',
                       storage='live', config=config, evidence_basis=doc['basis'], coverage_note=coverage,
                       tags=[notice.get('organizer',''),notice.get('notice_type','')],
                       warnings=article['warnings'], attachment_count=len(article['attachments']))
+        record.update(source_name=article.get('source_name',''),source_kind=article.get('source_kind','등록 기관 게시판'),
+                      resolved_url=article.get('resolved_url',article['url']))
         analysis = dict(source_hash=sha, notice=notice, pages=pages, source_info=info, config=config,
-                        notice_trace=dict(trace))
+                        notice_trace=dict(trace),analyzed_at=analyzed_at)
         cache.publish(record,analysis,data)
-        return record, False
+        return record, bool(cached)
     finally:
-        cache.release(job)
+        if claimed:cache.release(job)

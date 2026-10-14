@@ -37,7 +37,11 @@ class Links(HTMLParser):
 
 def normalized(url):
     p=urlsplit(canonical_url(url))
-    keep=sorted((k,v) for k,v in parse_qsl(p.query) if k not in ('article.offset','articleLimit') and not k.startswith('utm_'))
+    values=parse_qsl(p.query)
+    identified=any(k in ('articleNo','seqNo','contentNo','idx','nttId','boardSeq') for k,v in values)
+    ignored={'article.offset','articleLimit','fbclid','gclid'}
+    if identified:ignored|={'page','pageNo','pageIndex','layout','title','keyword','where','searchType','searchWord'}
+    keep=sorted((k,v) for k,v in values if k not in ignored and not k.startswith('utm_'))
     return urlunsplit((p.scheme,p.netloc,p.path,urlencode(keep),''))
 
 def discover(board=BOARD):

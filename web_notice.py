@@ -53,7 +53,7 @@ def parse_article(html):
     return title.get_text(' ', strip=True), body
 
 
-def source_pdf(title, body, url, images):
+def source_pdf(title, body, url, images,include_provenance=True):
     font_path = Path('C:/Windows/Fonts/malgun.ttf')
     font = 'GonggoWebKorean' if font_path.exists() else 'HYSMyeongJo-Medium'
     if font not in pdfmetrics.getRegisteredFontNames():
@@ -136,8 +136,9 @@ def source_pdf(title, body, url, images):
                 walk(child)
     walk(body)
     # Retrieval time is outside the PDF so unchanged content has a stable hash.
-    story += [Spacer(1, 15), Paragraph('공식 게시글 본문을 분석용 PDF로 재구성했습니다. 페이지 번호는 이 PDF 기준입니다. 첨부파일은 별도 문서입니다.', style),
-              Paragraph(escape(url), style)]
+    if include_provenance:
+        story += [Spacer(1, 15), Paragraph('공식 게시글 본문을 분석용 PDF로 재구성했습니다. 페이지 번호는 이 PDF 기준입니다. 첨부파일은 별도 문서입니다.', style),
+                  Paragraph(escape(url), style)]
     out = io.BytesIO()
     try:
         SimpleDocTemplate(out, title=title, author='5G', leftMargin=45, rightMargin=45,
