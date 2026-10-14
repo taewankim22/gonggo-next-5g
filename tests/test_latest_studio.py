@@ -91,3 +91,13 @@ def test_verification_session_never_reads_or_writes_existing_browser_drafts(monk
     fake.query_params={}
     browser_draft.bootstrap();browser_draft.save_browser()
     assert state['_verification_session']
+
+
+def test_live_pdf20_regression_keeps_unsupported_document_list_unknown():
+    fixture=json.loads((Path(__file__).parent/'fixtures/compact_pdf20.json').read_text('utf-8'))
+    n=ground_notice(validate_payload(fixture['raw'],notice_schema()),fixture['pages'])
+    assert n['application_deadline']=='2026-01-26' and n['eligibility_page']=='2'
+    assert n['notice_type']=='대외활동·봉사' and n['_workflow_review']
+    assert n['required_documents']==[] and n['_schema_limits']
+    row=next(c for c in guard_review(n,{}, {'documents_status':'해당 없음'},fixture['pages']) if c['key']=='documents')
+    assert row['status']=='확인 필요' and '설정에서' in row['reason']

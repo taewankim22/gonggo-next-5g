@@ -101,6 +101,8 @@ def guard_review(notice, answers, raw, pages):
         presence=notice.get(key+'_presence','명시' if notice.get(key+'_rule') else '미기재')
         if presence=='미기재':
             status,reason,action='확인 필요','문서에서 이 조건을 찾지 못했습니다. 비적용이나 충족을 뜻하지 않습니다.','상세 모집요강이나 운영기관에서 이 조건의 적용 여부를 확인하세요.'
+            if notice.get('_schema_limits'):
+                reason='현재 Studio 설정에서 이 조건을 추출하지 않았습니다. 원문에 없거나 적용되지 않는다는 뜻은 아닙니다.'
         elif presence=='판독불가':
             status,reason,action='확인 필요','원본의 이 부분을 판독하지 못했습니다.','더 선명한 원본이나 상세 모집요강을 확인하세요.'
         elif not verified:
