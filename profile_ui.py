@@ -159,5 +159,10 @@ def render_catalog(root,connection=None):
                 from browser_draft import single_snapshot
                 state=available_record(root,record)
                 saved=st.session_state.get('workspaces',{}).get(state['source_hash'])
-                activate(st.session_state,saved or single_snapshot(state));st.rerun()
+                activate(st.session_state,saved or single_snapshot(state))
+                # Keep saved personal answers, while using the current public
+                # grounding rules and server-owned execution trace for this hash.
+                for field in ('notice','raw_notice','pages','notice_trace','notice_config','catalog_source','evidence_basis'):
+                    if field in state:st.session_state[field]=state[field]
+                st.rerun()
     if not count:st.info('현재 필터에 맞는 분석 공고가 없습니다. 검색어 또는 접수 상태를 바꿔보세요.')

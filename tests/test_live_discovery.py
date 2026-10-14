@@ -106,6 +106,24 @@ def test_total_terms_never_become_remaining_term_comparison():
     assert n['_structured_notice']['지원조건'][0]['조건']=='정규 수업연한 8학기 이내'
 
 
+def test_earned_credits_scale_and_multiple_terms_are_not_single_term_gpa():
+    from workflow_adapter import adapt_notice,ground_notice
+    raw=result()
+    template={'분류':'지원자격','적용대상':'전체','적용단계':'지원단계','대조항목':'성적','비교방법':'이상',
+              '기준값':'4.5','만점':'4.5','근거페이지':'1','기준시점':'2026-1학기','예외':''}
+    rules=[{**template,'조건':'평점 4.5점 및 18학점 취득','근거원문':'평점 4.5점 및 18학점 취득'},
+           {**template,'기준값':'18','조건':'평점 4.5점 및 18학점 취득','근거원문':'평점 4.5점 및 18학점 취득'},
+           {**template,'기준값':'4.4','조건':'2026-1학기 이전 2개학기 평점 평균 4.4 이상','근거원문':'2026-1학기 이전 2개학기 평점 평균 4.4 이상'},
+           {**template,'기준값':'3.5','조건':'평점 3.5 이상','근거원문':'4.5점 만점으로 평점 3.5 이상'}]
+    raw['지원조건']=rules
+    n=ground_notice(adapt_notice(raw),['\n'.join(r['근거원문'] for r in rules)])
+    rows=n['_structured_notice']['지원조건']
+    assert rows[0]['만점']==''
+    assert rows[1]['대조항목']=='' and rows[1]['비교방법']=='검토'
+    assert rows[2]['비교방법']=='검토' and rows[2]['기준시점']==''
+    assert rows[3]['만점']=='4.5' and rows[3]['비교방법']=='이상'
+
+
 def test_catalog_integration_preserves_static_and_live(tmp_path):
     from catalog import load_catalog,available_record,card_review
     r,_=analyze_public(tmp_path,article(),0,'agt_test','13',result)

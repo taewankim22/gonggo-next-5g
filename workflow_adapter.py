@@ -99,6 +99,17 @@ def ground_notice(notice,pages):
         # remaining_terms profile unless that specific concept is in the source.
         if row.get('대조항목')=='잔여학기' and not re.search(r'잔여\s*학기|남은\s*학기|remaining\s+(?:\w+\s+){0,2}(?:semester|term)',row.get('근거원문',''),re.I):
             row.update(대조항목='',비교방법='검토',기준값='')
+        if row.get('대조항목')=='성적':
+            quote=row.get('근거원문','');value=row.get('기준값','').strip();scale=row.get('만점','').strip()
+            # Earned credits and GPA are different quantities. Never compare 18
+            # credits against a GPA of 4.0 simply because both came from one line.
+            if value and re.search(re.escape(value)+r'\s*(?:학점|credits?)',quote,re.I) and not re.search(r'(?:평점|GPA)\s*(?:of\s*)?'+re.escape(value)+r'(?![\d.])',quote,re.I):
+                row.update(대조항목='',비교방법='검토',기준값='',만점='')
+            elif scale and not re.search(re.escape(scale)+r'\s*(?:점\s*)?(?:만점|scale)|(?:만점|out of|/)\s*'+re.escape(scale),quote,re.I):
+                # A maximum score is not implied just by seeing that score earned.
+                row['만점']=''
+            if re.search(r'(?:이전|직전)\s*\d+\s*개?\s*학기|\d+\s*개?\s*학기.*(?:평균|각\s*평점)|previous\s+(?:two|three|\d+)\s+(?:semester|term)',row.get('조건',''),re.I):
+                row.update(비교방법='검토',기준시점='')
     for key in ('지원조건','제출서류','일정','혜택','주의사항'):
         for row in raw.get(key,[]):
             quote=row.get('근거원문','');old=row.get('근거페이지','')
