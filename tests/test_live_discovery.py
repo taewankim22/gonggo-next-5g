@@ -151,9 +151,9 @@ def test_ui_fetch_prepare_analyze_filter_failure_without_background_calls(monkey
     monkeypatch.setattr('discovery_ui.LiveCatalog',lambda root:original(tmp_path))
     monkeypatch.setattr('discovery_flow.LiveCatalog',lambda root:original(tmp_path))
     monkeypatch.setattr('catalog_ranking.LiveCatalog',lambda root:original(tmp_path))
-    def discover(*args):
+    def discover(*args,**kwargs):
         ds.remember([{'title':'테스트 공고','url':URL,'source_name':'테스트'}])
-        return ds.items(),dict(found=1,queries_completed=0,queries_total=54,query_cache_hits=0,sources=[],errors=[])
+        return ds.items(),dict(found=1,queries_completed=0,queries_total=90,query_cache_hits=0,sources=[],errors=[])
     monkeypatch.setattr('discovery_ui.discover_nationwide',discover)
     monkeypatch.setattr('nationwide_notice.prepare_public_article',lambda *args:article())
     calls=[]

@@ -126,7 +126,7 @@ def test_save_and_search_ui_one_action_keeps_private_data_out_of_catalog(monkeyp
     monkeypatch.setattr('discovery_ui.DiscoveryStore',lambda root:ds)
     monkeypatch.setattr('discovery_flow.LiveCatalog',lambda root:original(tmp_path))
     monkeypatch.setattr('discovery_ui.LiveCatalog',lambda root:original(tmp_path))
-    monkeypatch.setattr('discovery_ui.discover_nationwide',lambda *args: (ds.items(),dict(found=1,queries_completed=54,queries_total=54,query_cache_hits=0,sources=[],errors=[])))
+    monkeypatch.setattr('discovery_ui.discover_nationwide',lambda *args,**kwargs: (ds.items(),dict(found=1,queries_completed=90,queries_total=90,query_cache_hits=0,sources=[],errors=[])))
     monkeypatch.setattr('search_ui.render_search_settings',lambda:SearchConfig('test'))
     monkeypatch.setattr('nationwide_notice.prepare_public_article',lambda *args:article())
     calls=[]

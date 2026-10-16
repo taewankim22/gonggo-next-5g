@@ -1,6 +1,6 @@
 """Search credentials stay in server secrets or the current session only."""
 import streamlit as st
-from national_search import search_config
+from national_search import search_config,search_plan
 
 
 def render_search_settings():
@@ -17,5 +17,5 @@ def render_search_settings():
             config=search_config({'api_key':api_key})
             st.write('입력한 키는 현재 세션에서만 사용합니다. 내 정보·브라우저 저장·공개 목록에는 포함하지 않습니다.')
             if config.enabled:st.info('입력됨 · 검색 실행 시 연결을 확인합니다.')
-        st.write('팀 공용 연결은 Streamlit Secrets의 [search]에 api_key를 추가하면 됩니다. 전체 검색은 기본 54크레딧이며 15분 이내 같은 검색은 재사용합니다.')
+        st.write(f'팀 공용 연결은 Streamlit Secrets의 [search]에 api_key를 추가하면 됩니다. 전체 5종류 검색은 최대 {len(search_plan())}회 요청하며 15분 이내 같은 검색은 재사용합니다. 검색할 종류를 줄이면 요청 수도 줄어듭니다.')
     return config

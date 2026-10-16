@@ -15,10 +15,10 @@ from test_live_discovery import article,result,URL
 
 def test_nationwide_plan_covers_every_region_and_category():
     plans=search_plan(2026)
-    assert len(plans)==54
+    assert len(plans)==90
     assert {p['region'] for p in plans}==set(REGIONS)|{'전국'}
-    assert all(len([p for p in plans if p['region']==r])==3 for r in REGIONS)
-    assert all('2026' not in p['query'] for p in plans if p['region']=='전국')
+    assert all(len([p for p in plans if p['region']==r])==5 for r in REGIONS)
+    assert all('2026' not in p['query'] for p in plans if p['region']=='전국' and 'site:' not in p['query'])
 
 
 def test_search_partial_failure_keeps_other_regions_and_cache(tmp_path):
@@ -29,11 +29,11 @@ def test_search_partial_failure_keeps_other_regions_and_cache(tmp_path):
         return {'items':[{'link':'https://example.org/notice/2026?utm_source=x','title':'<b>2026</b> 장학생 모집'}]}
     config=SearchConfig('PRIVATE_SECRET')
     found,stats=discover_nationwide(tmp_path,config,searcher=search,sources=())
-    assert stats['queries_completed']==51 and len(stats['errors'])==3 and len(found)==1
+    assert stats['queries_completed']==85 and len(stats['errors'])==5 and len(found)==1
     assert '제주' in DiscoveryStore(tmp_path).items()[0]['regions']
     assert 'PRIVATE' not in str(DiscoveryStore(tmp_path).items())+str(stats)
     again,next_stats=discover_nationwide(tmp_path,config,searcher=search,sources=())
-    assert next_stats['query_cache_hits']==51 and len(calls)==57
+    assert next_stats['query_cache_hits']==85 and len(calls)==95
 
 
 def test_missing_credentials_never_claim_national_search(tmp_path):

@@ -42,4 +42,4 @@ def test_hackathon_and_competition_search_candidates_are_not_discarded(tmp_path)
         return {'items':[{'link':f'https://example.org/notice/{i}','title':t} for i,t in enumerate(titles)]}
     found,stats=discover_nationwide(tmp_path,SearchConfig('test'),searcher=search,sources=())
     assert {r['title'] for r in found}==set(titles)
-    assert stats['queries_completed']==54
+    assert stats['queries_completed']==90

@@ -25,11 +25,17 @@ TITLE_SELECTORS=('#bo_v_title','.contest_view h3.tit','.bbs_view .titarea .tit',
                  '.b-title','.artclViewHead h2','.artclViewHead','.view-title','.view_title',
                  '.board_view .subject','.subject','article h1','article h2','title')
 EXTENSIONS=('.pdf','.hwp','.hwpx','.png','.jpg','.jpeg','.zip','.docx','.xlsx')
+# Verified bulletin structures, scoped to their hosts so generic layout classes
+# cannot accidentally include menus or unrelated announcements elsewhere.
+SITE_SELECTORS={
+    'scatch.ssu.ac.kr':(('#contents .col-lg-9 > .bg-white > div:last-child',),
+                       ('#contents .col-lg-9 h1',)),
+}
 
 
 def source_url(url):
     url=normalized(url)
-    if aggregator(url):raise ValueError('공고 모음 사이트입니다. 주최기관 원문을 연결해야 자동 분석할 수 있습니다.')
+    if aggregator(url):raise ValueError('보도·공고 모음 사이트입니다. 주최기관 원문을 연결해야 자동 분석할 수 있습니다.')
     return url
 
 
@@ -37,14 +43,15 @@ def parse_public_article(response, fallback_title):
     soup=BeautifulSoup(decode_html(response),'html.parser')
     title=fallback_title
     body=None
-    for sel in BODY_SELECTORS:
+    extra_body,extra_title=SITE_SELECTORS.get(urlsplit(response.url).hostname,((),()))
+    for sel in extra_body+BODY_SELECTORS:
         for n in soup.select(sel):
             if len(n.get_text(' ',strip=True))>=70 or n.find('img'):
                 body=n;break
         if body is not None:break
     if body is None:
         raise ValueError('이 사이트의 공고 본문 구조를 아직 지원하지 않습니다. 공식 원문 파일을 직접 올려주세요.')
-    for selector in TITLE_SELECTORS:
+    for selector in extra_title+TITLE_SELECTORS:
         node=soup.select_one(selector)
         value=node.get_text(' ',strip=True) if node else ''
         if 8<=len(value)<=300 and NOTICE_WORDS.search(value):

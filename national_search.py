@@ -19,7 +19,9 @@ from collect_notices import decode_html, normalized
 from public_network import fetch
 
 REGIONS = ('서울','부산','대구','인천','광주','대전','울산','세종','경기','강원','충북','충남','전북','전남','경북','경남','제주')
-KINDS = ('장학금 장학생 모집','대학생 공모전 모집','대외활동 서포터즈 모집')
+SEARCH_KINDS = {'장학금':'장학금 장학생 모집','공모전':'대학생 공모전 모집',
+                '대외활동':'대외활동 서포터즈 모집','해커톤':'해커톤 참가자 모집','대회':'경진대회 참가자 모집'}
+KINDS = tuple(SEARCH_KINDS.values())
 # Boards supplement nationwide search; they do not define its geographic scope.
 SOURCES = (
     ('kosaf','한국장학재단','https://www.kosaf.go.kr/ko/notice.do'),
@@ -30,9 +32,13 @@ SOURCES = (
 )
 AGGREGATORS = ('thinkcontest.com','wevity.com','linkareer.com','campuspick.com','contestkorea.com','all-con.co.kr',
               'thinkyou.co.kr','allforyoung.com','ssgsag.kr','dreamspon.com','contestalgo.com','gongmo.incruit.com',
-              'blog.naver.com','m.blog.naver.com','tistory.com','ipsajeon.com','instagram.com','facebook.com')
+              'blog.naver.com','m.blog.naver.com','tistory.com','ipsajeon.com','instagram.com','facebook.com',
+              'koreahackathons.com','momo365.net','holaworld.io','inthiswork.com','docshunt.com',
+              'contestindex.com','threads.com','youtube.com','youtu.be','news.nate.com',
+              'news.naver.com','news1.kr','yna.co.kr','news2day.co.kr','mt.co.kr')
 NOTICE_WORDS = re.compile(r'장학|장학생|공모|경진|대회|해커톤|hack[\s-]*a[\s-]*thon|대외활동|서포터|봉사|멘토|아이디어|참가자', re.I)
 RESULT_NOTICE = re.compile(r'(?:합격자|면접\s*대상자|선발\s*결과|선정\s*결과|심사\s*결과|수상작|수상자).{0,15}(?:발표|안내|공고)|(?:최종|서류)\s*합격')
+NON_RECRUITMENT = re.compile(r'Archives|공고\s*모음|서비스\s*(?:중단|점검)|시스템\s*(?:점검|중단)|교육/대외활동\s*[–—-]',re.I)
 
 
 @dataclass(repr=False)
@@ -49,10 +55,44 @@ def search_config(values=None):
     return SearchConfig(str(values.get('api_key') or os.getenv('TAVILY_API_KEY','')).strip())
 
 
-def search_plan(year=None):
+def selected_kinds(kinds=None):
+    if kinds is None:return list(SEARCH_KINDS)
+    chosen=[kind for kind in SEARCH_KINDS if kind in kinds]
+    if not chosen:raise ValueError('검색할 공고 종류를 하나 이상 선택해주세요.')
+    return chosen
+
+
+def search_plan(year=None,kinds=None):
     year = year or dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).year
-    return [{'query':f'{"" if region=="전국" else str(year)} {region} {kind}'.strip(), 'region':region,'kind':kind}
-            for region in ('전국',)+REGIONS for kind in KINDS]
+    plans=[]
+    for region in ('전국',)+REGIONS:
+        for category in selected_kinds(kinds):
+            kind=SEARCH_KINDS[category]
+            # The first event query favors institutional recruitment notices;
+            # regional queries also cover independent/company event websites.
+            query=(f'{year} {kind} 공고 (site:ac.kr OR site:go.kr OR site:or.kr)'
+                   if region=='전국' and category in ('해커톤','대회') else
+                   f'{"" if region=="전국" else str(year)} {region} {kind}'.strip())
+            plans.append(dict(query=query,region=region,kind=kind))
+    return plans
+
+
+def discovery_kind(item):
+    from catalog_categories import catalog_kind
+    title=item['title']
+    if re.search(r'장학|장학생',title):return '장학금'
+    kind=catalog_kind({'title':title,'kind':''})
+    return kind if kind!='기타' else '대외활동'
+
+
+def balanced_candidates(items,kinds=None):
+    """Fair public-topic ordering; never use the user's private profile."""
+    chosen=selected_kinds(kinds)
+    buckets={k:[] for k in chosen}
+    for item in items:
+        kind=discovery_kind(item)
+        if kind in buckets:buckets[kind].append(item)
+    return [b[i] for i in range(max(map(len,buckets.values()),default=0)) for b in buckets.values() if i<len(b)]
 
 
 class SearchError(ValueError):
@@ -116,7 +156,8 @@ def candidate(url, title, source_name, region='전국', source_id='web'):
     return dict(url=url,title=public_title(title),source_name=source_name,source_id=source_id,
                 source_kind='등록 기관 게시판' if source_id!='web' else '웹 검색 원문 · 기관 확인 필요',
                 regions=[region], needs_original=aggregator(url),
-                notice_purpose='결과·후속 안내' if RESULT_NOTICE.search(public_title(title)) else '모집 여부 확인 필요')
+                notice_purpose=('결과·후속 안내' if RESULT_NOTICE.search(public_title(title)) else
+                                '목록·운영 안내' if NON_RECRUITMENT.search(public_title(title)) else '모집 여부 확인 필요'))
 
 
 def board_candidates(source):
@@ -181,13 +222,17 @@ class DiscoveryStore:
         with self.connect() as db:
             return [json.loads(r[0]) for r in db.execute('SELECT payload FROM candidates ORDER BY attempted ASC,seen DESC,rowid ASC')]
 
-    def queue(self, urls=None):
+    def queue(self, urls=None,kinds=None):
         items=self.items()
         if isinstance(urls,(list,tuple)):
             by_url={c['url']:c for c in items}
             items=[by_url[url] for url in urls if url in by_url]
         elif urls is not None:items=[c for c in items if c['url'] in urls]
-        return [c for c in items if not c.get('needs_original') and c.get('notice_purpose')!='결과·후속 안내']
+        # Recheck old cached titles under current rules as well.
+        eligible=[c for c in items if not c.get('needs_original') and not aggregator(c['url'])
+                  and c.get('notice_purpose') not in ('결과·후속 안내','목록·운영 안내')
+                  and not RESULT_NOTICE.search(c['title']) and not NON_RECRUITMENT.search(c['title'])]
+        return balanced_candidates(eligible,kinds)
 
     def attempted(self,url):
         with self.connect() as db:db.execute('UPDATE candidates SET attempted=? WHERE url=?',(time.time(),url))
@@ -204,14 +249,15 @@ class DiscoveryStore:
         return result,False
 
 
-def discover_nationwide(root, config=None, progress=None, searcher=None, sources=SOURCES):
-    """54 country/region/category queries, independent of private profile data.
+def discover_nationwide(root, config=None, progress=None, searcher=None, sources=SOURCES,kinds=None):
+    """Country/region/category queries, independent of private profile data.
 
     Each query retrieves up to 20 indexed links. This is nationwide coverage,
     not a claim to enumerate every announcement or every search-result page.
     """
+    plans=search_plan(kinds=kinds)
     store=DiscoveryStore(root)
-    stats=dict(sources=[],queries_completed=0,queries_total=54,query_cache_hits=0,search_credits=0,
+    stats=dict(sources=[],queries_completed=0,queries_total=len(plans),query_cache_hits=0,search_credits=0,
                search_enabled=bool(config and config.enabled),errors=[],found=0)
     batches=[]
     def report(message):
@@ -228,7 +274,7 @@ def discover_nationwide(root, config=None, progress=None, searcher=None, sources
             report(f'공식 출처 {len(stats["sources"])}/{len(sources)} 확인 중…')
     if config and config.enabled:
         # Sequential API calls stop immediately on credential/quota failures.
-        for plan in search_plan():
+        for plan in plans:
             try:
                 result,reused=store.cached_search(plan['query'],searcher or (lambda q:tavily_search(config,q)))
                 items=[]
@@ -242,7 +288,7 @@ def discover_nationwide(root, config=None, progress=None, searcher=None, sources
             except SearchError as exc:
                 stats['errors'].append(f'{plan["region"]} · {plan["kind"]}: {exc}')
                 if exc.fatal:break
-            report(f'전국·17개 시도 검색 {stats["queries_completed"]}/54 · 원문 후보 수집 중…')
+            report(f'전국·17개 시도 검색 {stats["queries_completed"]}/{stats["queries_total"]} · 원문 후보 수집 중…')
     else:
         stats['errors'].append('검색 API 미연결: 전국 웹 검색은 실행하지 않았습니다. 등록 기관 게시판만 확인했습니다.')
     # Interleave query results so a single source/category cannot fill the queue.

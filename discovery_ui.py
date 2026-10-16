@@ -2,7 +2,7 @@
 import streamlit as st
 from discovery_flow import refresh_latest
 from live_catalog import LiveCatalog
-from national_search import DiscoveryStore, SOURCES, discover_nationwide, candidate
+from national_search import DiscoveryStore, SOURCES, SEARCH_KINDS, search_plan, discover_nationwide, candidate
 from upstage_client import StudioError
 
 
@@ -40,26 +40,31 @@ def render_discovery(root, connection):
     ai_ready=bool(connection.get('enabled'))
     with st.container(border=True):
         st.subheader('전국 최신 공고 찾기')
-        st.write('전국·17개 시도의 장학금·공모전·대외활동을 검색하고, **저장한 내 정보**로 분석한 공고를 정렬합니다.')
+        st.write('전국·17개 시도의 장학금·공모전·대외활동·해커톤·대회를 검색하고, **저장한 내 정보**로 분석한 공고를 정렬합니다.')
+        kinds=st.multiselect('검색할 공고 종류',list(SEARCH_KINDS),default=list(SEARCH_KINDS),key='discovery_kinds')
         with st.expander('수집 출처 · 분석 방식'):
-            st.write('전국 공통 + 17개 시도 × 3개 분야, 총 54개 검색어로 웹 검색합니다. 검색어별 최대 20개 링크를 확인하며, 검색에 잡히지 않는 공고도 있습니다.')
+            total=len(search_plan(kinds=kinds)) if kinds else 0
+            st.write(f'전국 공통 + 17개 시도 × 선택한 {len(kinds)}개 종류, 총 {total}개 검색어로 웹 검색합니다. 검색어별 최대 20개 링크를 확인하며, 검색에 잡히지 않는 공고도 있습니다.')
             st.write('최근 한 달 게시·수정 검색을 사용합니다. 날짜를 알 수 없는 결과도 포함될 수 있어 실제 접수 일정은 원문으로 확인합니다. 알려진 공고 모음·블로그는 검색에서 제외합니다.')
+            st.write('해커톤·대회는 기관·대학의 모집 공고를 우선 찾고, 지역별 검색으로 기업·행사 사이트도 확인합니다. 보도·모음 페이지는 주최기관 원문 연결이 필요합니다.')
             st.write('지역은 검색 범위입니다. 실제 지원 가능 지역·학교는 원문 분석으로 확인합니다. 개인 프로필은 검색 API에 전달하지 않습니다.')
             for _,name,url in SOURCES:st.link_button(name,url)
             st.write('공고 모음 사이트에서 발견한 링크는 주최기관 원문이 필요합니다. 본문·포스터와 읽을 수 있는 첨부 최대 10개를 분석하고 누락·실패를 표시합니다.')
             st.write('같은 문서·설정은 출처가 달라도 분석을 재사용합니다. 원문이 바뀌면 이전 조건을 새 판정에 섞지 않습니다.')
             limit=st.selectbox('한 번에 원문 분석할 공고 수',[10,20,50,100,3,1],key='discovery_batch_size',format_func=lambda n:f'{n}개 공고')
             st.write('수집 범위와 별개인 처리 묶음입니다. 나머지 후보는 아래 목록에 남고 이어서 분석할 수 있습니다.')
+            st.write('선택한 종류별로 번갈아 분석합니다. 해당 종류의 원문 후보를 확보하지 못하면 다른 종류를 계속 처리합니다.')
         if not search_ready:st.info('전국 웹 검색을 사용하려면 메뉴 → 전국 검색 연결 · Tavily에서 연결해주세요.')
         if not ai_ready:st.info('원문 분석에는 실제 AI 분석 모드와 Upstage 연결이 필요합니다.')
         pending=st.session_state.pop('_discovery_auto_requested',False)
-        clicked=st.button('최신 공고 찾기',key='discovery_latest',type='primary',disabled=not (search_ready and ai_ready),use_container_width=True)
-        if (clicked or pending) and search_ready and ai_ready:
+        clicked=st.button('최신 공고 찾기',key='discovery_latest',type='primary',disabled=not (search_ready and ai_ready and kinds),use_container_width=True)
+        if not kinds:st.info('검색할 공고 종류를 하나 이상 선택해주세요.')
+        if (clicked or pending) and search_ready and ai_ready and kinds:
             status=st.empty()
             try:
-                found,stats=discover_nationwide(root,config,status.info)
+                found,stats=discover_nationwide(root,config,status.info,kinds=kinds)
                 st.session_state['_national_search_summary']=stats
-                queue=DiscoveryStore(root).queue([c['url'] for c in found])
+                queue=DiscoveryStore(root).queue([c['url'] for c in found],kinds=kinds)
                 run_batch(root,connection,limit,queue)
                 st.session_state['catalog_kind']='전체';st.session_state['catalog_status']='전체';st.session_state['catalog_search']=''
             except (ValueError,OSError,StudioError):st.error('검색을 완료하지 못했습니다. 저장된 후보와 완료 분석은 유지됩니다. 아래 목록에서 다시 시도해주세요.')
@@ -113,13 +118,14 @@ def render_manual_discovery(root,connection):
                 if doc.get('error'):st.warning(doc['name']+' · '+doc['error'])
         if selected.get('needs_original'):
             st.info('모음 사이트에서 발견했습니다. 주최기관 원문 URL을 위에 추가하면 분석할 수 있습니다.')
-        if selected.get('notice_purpose')=='결과·후속 안내':
-            st.info('합격·선발 결과 등 후속 안내로 보입니다. 자동 모집 분석에서는 제외하고 직접 확인할 수 있습니다.')
+        if selected.get('notice_purpose') in ('결과·후속 안내','목록·운영 안내'):
+            st.info('모집 원문이 아닌 결과·목록·운영 안내로 보입니다. 자동 모집 분석에서는 제외하고 직접 확인할 수 있습니다.')
         if st.button('이 공고 원문 확인·분석',key='discovery_analyze',disabled=not connection.get('enabled') or selected.get('needs_original',False)):
             summary=run_batch(root,connection,1,[selected])
             if summary:show_summary(summary)
         if st.button('분석 대기 공고 이어서 처리',key='discovery_continue',disabled=not connection.get('enabled')):
-            queue=[c for c in store.queue() if not scans.get(c['url'],{}).get('complete')]
+            kinds=st.session_state.get('discovery_kinds')
+            queue=[c for c in store.queue(kinds=kinds or None) if not scans.get(c['url'],{}).get('complete')]
             if not queue:st.info('저장된 후보의 분석을 마쳤습니다. 최신 공고 찾기로 원문 변경 여부를 확인하세요.')
             else:
                 summary=run_batch(root,connection,st.session_state.get('discovery_batch_size',10),queue)
