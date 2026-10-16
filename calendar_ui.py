@@ -15,8 +15,9 @@ def set_day(day):
 
 
 def filter_groups(groups,kind,status,interest):
+    from catalog_categories import matches_kind
     return [g for g in groups if
-        (kind=='전체' or g['record']['kind']==kind) and
+        matches_kind(g['record'],kind) and
         (status=='전체' or group_status(g['record']['_calendar'])==status) and
         (not interest or interest.casefold() in (g['record']['title']+' '+str(g['record'].get('tags',[]))).casefold())]
 

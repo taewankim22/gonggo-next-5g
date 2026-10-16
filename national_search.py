@@ -31,7 +31,7 @@ SOURCES = (
 AGGREGATORS = ('thinkcontest.com','wevity.com','linkareer.com','campuspick.com','contestkorea.com','all-con.co.kr',
               'thinkyou.co.kr','allforyoung.com','ssgsag.kr','dreamspon.com','contestalgo.com','gongmo.incruit.com',
               'blog.naver.com','m.blog.naver.com','tistory.com','ipsajeon.com','instagram.com','facebook.com')
-NOTICE_WORDS = re.compile(r'장학|장학생|공모|경진|대외활동|서포터|봉사|멘토|아이디어|참가자')
+NOTICE_WORDS = re.compile(r'장학|장학생|공모|경진|대회|해커톤|hack[\s-]*a[\s-]*thon|대외활동|서포터|봉사|멘토|아이디어|참가자', re.I)
 RESULT_NOTICE = re.compile(r'(?:합격자|면접\s*대상자|선발\s*결과|선정\s*결과|심사\s*결과|수상작|수상자).{0,15}(?:발표|안내|공고)|(?:최종|서류)\s*합격')
 
 

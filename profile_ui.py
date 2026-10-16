@@ -132,17 +132,18 @@ def render_catalog(root,connection=None):
     from discovery_ui import render_discovery
     render_discovery(root,connection)
     from calendar_ui import filter_groups,render_calendar
+    from catalog_categories import KINDS,matches_kind
     st.subheader('분석한 공고')
     catalog=load_catalog(root)
-    if not catalog:st.info('아직 원문 분석을 마친 공고가 없습니다.');return
     groups=personalized_catalog(root,catalog,st.session_state.get('common_profile',{}))
-    kinds=['전체']+sorted({r['kind'] for r in catalog})
+    kinds=list(KINDS)
+    kind_counts={kind:sum(matches_kind(g['record'],kind) for g in groups) for kind in kinds}
     if st.session_state.get('catalog_kind') not in kinds:st.session_state.catalog_kind='전체'
     statuses=['전체','마감 전 · 시작일 확인','오늘 마감 · 시간 확인 필요','마감','시간대 확인 필요','상시 모집','예산 소진 시 종료','마감일 확인 필요','문서 간 마감 충돌','마감 조건 확인 필요','원문 갱신 확인 필요']
     if st.session_state.get('catalog_status') not in statuses:st.session_state.catalog_status='전체'
     with st.container(key='catalog_filters'):
         cols=st.columns([1,1.5,2])
-        with cols[0]:kind=st.selectbox('종류',kinds,key='catalog_kind')
+        with cols[0]:kind=st.selectbox('종류',kinds,key='catalog_kind',format_func=lambda k:f'{k} ({kind_counts[k]}건)')
         with cols[1]:status=st.selectbox('접수 상태',statuses,key='catalog_status')
         with cols[2]:interest=st.text_input('관심 분야 검색',placeholder='교육, 장학, 공모전 등',key='catalog_search')
     view=st.radio('공고 보기',['목록 보기','캘린더 보기'],horizontal=True,key='catalog_view',label_visibility='collapsed')
@@ -154,7 +155,10 @@ def render_catalog(root,connection=None):
     if view=='캘린더 보기':render_calendar(selected,draw)
     else:
         for group in selected:draw(group)
-    if not selected:st.info('현재 필터에 맞는 분석 공고가 없습니다. 검색어 또는 접수 상태를 바꿔보세요.')
+    if not selected:
+        if kind!='전체' and not kind_counts[kind]:
+            st.info(f'아직 분석을 마친 {kind} 공고가 없습니다. 최신 공고 찾기 또는 주최기관 원문 연결로 추가할 수 있습니다.')
+        else:st.info('현재 필터에 맞는 분석 공고가 없습니다. 검색어 또는 접수 상태를 바꿔보세요.')
 
 
 def render_catalog_card(root,group,suffix=''):

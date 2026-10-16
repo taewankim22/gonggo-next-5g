@@ -51,6 +51,28 @@ def test_calendar_state_filter_review_return_and_no_calls(app):
         assert not at.exception
 
 
+def test_category_filters_stay_available_with_zero_results_and_no_api(app,monkeypatch):
+    at=app
+    with patch('upstage_client.run_agent',side_effect=AssertionError('No paid calls')), \
+         patch('national_search.tavily_search',side_effect=AssertionError('No searches')):
+        at.selectbox(key='catalog_kind').set_value('해커톤').run(timeout=20)
+        assert any('아직 분석을 마친 해커톤' in i.value for i in at.info)
+        at.radio(key='catalog_view').set_value('캘린더 보기').run(timeout=20)
+        assert at.selectbox(key='catalog_kind').value=='해커톤'
+        at.selectbox(key='catalog_kind').set_value('공모전').run(timeout=20)
+        at.selectbox(key='calendar_month').set_value('2026-08').run(timeout=20)
+        assert at.button(key='calendar_date_2026-08-28').label=='28일 · 1건'
+        at.radio(key='catalog_view').set_value('목록 보기').run(timeout=20)
+        assert at.selectbox(key='catalog_kind').value=='공모전'
+        next(b for b in at.button if b.label=='이 공고 검토하기').click().run(timeout=20)
+        at.button(key='entry_catalog').click().run(timeout=20)
+        assert at.selectbox(key='catalog_kind').value=='공모전'
+        monkeypatch.setattr('catalog.load_catalog',lambda root:[])
+        at.selectbox(key='catalog_kind').set_value('대회').run(timeout=20)
+        assert any('아직 분석을 마친 대회' in i.value for i in at.info)
+        assert not at.exception
+
+
 def test_multiple_events_same_day_and_unknowns_keep_filtering(app,monkeypatch):
     from copy import deepcopy
     from catalog import load_catalog
