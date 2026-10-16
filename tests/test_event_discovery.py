@@ -1,7 +1,9 @@
 import pytest
 from national_search import (DiscoveryStore,SearchConfig,REGIONS,search_plan,candidate,
                             discover_nationwide,discovery_kind)
-from nationwide_notice import parse_public_article
+from nationwide_notice import parse_public_article,file_name,attachment_links
+from bs4 import BeautifulSoup
+from copy import deepcopy
 from public_network import Response
 
 
@@ -53,3 +55,58 @@ def test_observed_ssu_recruitment_layout_excludes_adjacent_notices():
     assert '트랙1 모집마감' in parsed.get_text() and '1억원' not in parsed.get_text()
     other=Response('https://unrecognized.org',html.encode(),'text/html; charset=utf-8',200)
     with pytest.raises(ValueError,match='본문 구조'):parse_public_article(other,'fallback')
+
+
+def test_public_pdf_header_recovers_korean_filename_without_changing_document():
+    expected='공고문_2026뉴스빅데이터해커톤.pdf'
+    broken=expected.encode('utf-8').decode('latin-1').encode('utf-8').decode('latin-1')
+    for header in (broken,expected):
+        r=Response('https://culture.go.kr/fileDown.do',b'%PDF-original','application/pdf',200,
+                   {'content-disposition':f'attachment; filename="{header}"'})
+        assert file_name(r)==expected and r.body==b'%PDF-original'
+
+
+def test_footer_certificate_is_not_a_recruitment_attachment():
+    html='''<div class="board-view-content"><a href="/notice.pdf">공고문.pdf</a></div>
+    <ul class="file-list"><li><a href="/apply.hwp">신청서.hwp</a></li></ul>
+    <div id="footer-wrap"><div id="footer"><div class="marks-list">
+      <a href="/ko/_Data/silla_wa_2022.pdf" title="새창열기">새창열기</a>
+    </div></div></div><nav><a href="/site-guide.pdf">이용 안내.pdf</a></nav>'''
+    links=attachment_links(BeautifulSoup(html,'html.parser'),'https://www.silla.ac.kr/ko/')
+    assert links==[('https://www.silla.ac.kr/notice.pdf','공고문.pdf'),
+                   ('https://www.silla.ac.kr/apply.hwp','신청서.hwp')]
+
+
+def test_empty_extract_title_uses_only_verified_main_page_title(tmp_path):
+    from live_catalog import analyze_public,LiveCatalog
+    from test_live_discovery import article
+    from test_latest_studio import compact
+    from workflow_adapter import ground_notice
+    a=article();a['source_title_verified']=True
+    raw=compact();raw['공고명']='';raw['_extract_conflicts']=['공고명 값이 문서 구간마다 다릅니다.']
+    record,_=analyze_public(tmp_path,a,0,'agt_test','20',lambda *args:deepcopy(raw))
+    state=LiveCatalog(tmp_path).state(record)
+    assert state['notice']['notice_title']==a['title']
+    assert not state['notice']['_studio_compact']['공고명']
+    assert state['notice']['source_conflicts']
+    assert ground_notice(state['notice'],state['pages'])['notice_title']==a['title']
+    for index,modified in enumerate([{'source_title_verified':False},{'url':a['url']+'&different=1'}]):
+        b={**a,**modified};b['documents']=deepcopy(a['documents'])
+        b['documents'][0]['data']+=str(index).encode()  # Isolated analysis, no cache reuse.
+        with pytest.raises(ValueError,match='공고 제목'):
+            analyze_public(tmp_path,b,0,'agt_test','20',lambda *args:deepcopy(raw))
+
+
+def test_legacy_press_analysis_stays_stored_but_is_not_a_recruitment_card(tmp_path):
+    from live_catalog import analyze_public,LiveCatalog
+    from test_live_discovery import article,result
+    from catalog_ranking import personalized_catalog
+    a=article();a['url']='https://biz.chosun.com/it-science/notice'
+    a['title']='SK하이닉스 AI 해커톤 개최 - 조선비즈'
+    analyze_public(tmp_path,a,0,'agt_test','13',result)
+    stored=LiveCatalog(tmp_path).records()
+    assert stored and personalized_catalog(tmp_path,stored,{})==[]
+    ds=DiscoveryStore(tmp_path)
+    ds.remember([dict(url=a['url'],title=a['title'],source_name='웹 검색',needs_original=False)])
+    assert ds.items()[0]['needs_original'] and not ds.queue()
+    assert LiveCatalog(tmp_path).records()==stored

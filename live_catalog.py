@@ -145,6 +145,17 @@ def analyze_public(root, article, document_index, agent_id, version, runner, pro
             notice=cached['notice'];pages=cached['pages'];trace=cached['notice_trace']
         else:
             raw = runner(data, doc['filename'], info, progress, trace)
+            from studio_latest import is_compact
+            if is_compact(raw):
+                raw=dict(raw)
+                raw.pop('_verified_source_title',None)
+                # Multiple routed extracts can leave the title empty. Preserve
+                # their conflicts, but allow the fetched page's own heading for
+                # the reconstructed main document. Never use a search snippet
+                # or transfer that title to an unrelated attached document.
+                if (not raw.get('공고명') and article.get('source_title_verified')
+                        and doc['document_url']==article['url']):
+                    raw['_verified_source_title']=article['title']
             notice = validate_payload(raw, notice_schema())
             ocr = parse_pages(trace.get('steps',[]))
             pages = ocr if any(ocr) else info['pages']

@@ -69,6 +69,13 @@ def file_name(response, hint=''):
     match=re.search(r"filename\*?\s*=\s*(?:UTF-8''|\")?([^\";]+)",disposition,re.I)
     hints=[unquote(match[1]) if match else '',hint,unquote(urlsplit(response.url).path)]
     name=next((Path(s).name for s in hints if Path(s).suffix.lower() in EXTENSIONS),'')
+    # Some source servers encode UTF-8 bytes as Latin-1 twice in HTTP headers.
+    # Only a lossless round trip is accepted; ordinary Korean filenames stay as-is.
+    for _ in range(2):
+        try:fixed=name.encode('latin-1').decode('utf-8')
+        except (UnicodeEncodeError,UnicodeDecodeError):break
+        if fixed==name:break
+        name=fixed
     if not name:
         data=response.body
         ext=('.pdf' if data.startswith(b'%PDF-') else '.png' if data.startswith(b'\x89PNG') else
@@ -86,6 +93,12 @@ def file_name(response, hint=''):
 def attachment_links(soup,base):
     out=[];seen=set()
     for a in soup.select('a[href]'):
+        # Footer accessibility certificates and navigation downloads are not
+        # attachments to the current announcement (observed on silla.ac.kr).
+        if any(p.name in ('footer','header','nav') or p.get('role') in ('contentinfo','navigation','banner')
+               or re.search(r'(^|[\s_-])(?:footer|gnb|lnb)(?:$|[\s_-])',
+                            str(p.get('id',''))+' '+' '.join(p.get('class',[])),re.I)
+               for p in a.parents):continue
         href=a['href'];name=a.get_text(' ',strip=True) or a.get('title','')
         if href.startswith(('javascript:', '#')):continue
         full=urljoin(base,href)
@@ -106,13 +119,16 @@ def prepare_public_article(candidate,folder):
     resolved=source_url(response.url)
     folder=Path(folder)/fingerprint(url)[:16];folder.mkdir(parents=True,exist_ok=True)
     documents=[];warnings=[];attachments=[];images={}
-    title=candidate['title'];text=''
+    title=candidate['title'];text='';source_title_verified=False
     content_type=response.content_type.lower()
     if 'html' not in content_type and (response.body[:4] in (b'%PDF',b'\x89PNG',b'\xd0\xcf\x11\xe0') or response.body.startswith((b'PK',b'\xff\xd8'))):
         name=file_name(response);inspect_input(response.body,name)
         documents.append(dict(name=name,filename=name,data=response.body,document_url=url,basis='공개 웹 문서 원본 · 문서 자체 페이지 기준'))
     else:
         title,body,soup=parse_public_article(response,title)
+        _,extra_titles=SITE_SELECTORS.get(urlsplit(response.url).hostname,((),()))
+        source_title_verified=any(n.get_text(' ',strip=True)==title
+                                  for selector in extra_titles+TITLE_SELECTORS for n in soup.select(selector))
         text=body.get_text(' ',strip=True)
         for styled in body.select('[style]'):
             bg=re.search(r'background-image\s*:\s*url\([\'\"]?([^\)\'\"]+)',styled.get('style',''),re.I)
@@ -161,6 +177,7 @@ def prepare_public_article(candidate,folder):
     if not documents:raise ValueError('읽을 수 있는 본문·첨부를 확보하지 못했습니다. 원문 파일로 확인해주세요.')
     for doc in documents:(folder/(fingerprint(doc['data'])+Path(doc['filename']).suffix)).write_bytes(doc['data'])
     return dict(title=title,url=url,resolved_url=resolved,checked_at=now_iso(),documents=documents,
+                source_title_verified=source_title_verified,
                 attachments=attachments,warnings=list(dict.fromkeys(warnings)),body_text=text,
                 attachment_limit_reached=False,source_name=candidate.get('source_name','웹 검색'),
                 source_kind=candidate.get('source_kind','웹 검색 원문 · 기관 확인 필요'))

@@ -36,8 +36,14 @@ def priority(record, review, profile, today=None):
 
 
 def personalized_catalog(root, records, profile, today=None):
+    from national_search import aggregator,RESULT_NOTICE,NON_RECRUITMENT
     scans=LiveCatalog(root).scans();groups={}
     for record in records:
+        # Apply source rules to legacy analyses too. Keep their stored evidence
+        # and discovery candidates, but do not present press/list pages as a
+        # recruitment announcement that a student can apply to.
+        if (record.get('storage')=='live' and (aggregator(record['source_url'])
+                or RESULT_NOTICE.search(record['title']) or NON_RECRUITMENT.search(record['title']))):continue
         groups.setdefault(record['source_url'],[]).append(record)
     out=[]
     for url,documents in groups.items():

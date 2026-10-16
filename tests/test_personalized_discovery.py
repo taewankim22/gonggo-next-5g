@@ -149,3 +149,8 @@ def test_save_and_search_ui_one_action_keeps_private_data_out_of_catalog(monkeyp
     next(b for b in at.button if b.label=='내 정보 저장').click().run()
     at.button(key='entry_catalog').click().run()
     assert not at.exception and calls==[1]
+    at.multiselect(key='discovery_kinds').set_value(['해커톤','대회']).run()
+    at.button(key='catalog_edit_profile').click().run()
+    at.button(key='entry_catalog').click().run()
+    assert not at.exception and calls==[1]
+    assert at.multiselect(key='discovery_kinds').value==['해커톤','대회']

@@ -35,7 +35,7 @@ AGGREGATORS = ('thinkcontest.com','wevity.com','linkareer.com','campuspick.com',
               'blog.naver.com','m.blog.naver.com','tistory.com','ipsajeon.com','instagram.com','facebook.com',
               'koreahackathons.com','momo365.net','holaworld.io','inthiswork.com','docshunt.com',
               'contestindex.com','threads.com','youtube.com','youtu.be','news.nate.com',
-              'news.naver.com','news1.kr','yna.co.kr','news2day.co.kr','mt.co.kr')
+              'news.naver.com','news1.kr','yna.co.kr','news2day.co.kr','mt.co.kr','biz.chosun.com')
 NOTICE_WORDS = re.compile(r'장학|장학생|공모|경진|대회|해커톤|hack[\s-]*a[\s-]*thon|대외활동|서포터|봉사|멘토|아이디어|참가자', re.I)
 RESULT_NOTICE = re.compile(r'(?:합격자|면접\s*대상자|선발\s*결과|선정\s*결과|심사\s*결과|수상작|수상자).{0,15}(?:발표|안내|공고)|(?:최종|서류)\s*합격')
 NON_RECRUITMENT = re.compile(r'Archives|공고\s*모음|서비스\s*(?:중단|점검)|시스템\s*(?:점검|중단)|교육/대외활동\s*[–—-]',re.I)
@@ -220,7 +220,12 @@ class DiscoveryStore:
 
     def items(self):
         with self.connect() as db:
-            return [json.loads(r[0]) for r in db.execute('SELECT payload FROM candidates ORDER BY attempted ASC,seen DESC,rowid ASC')]
+            items=[json.loads(r[0]) for r in db.execute('SELECT payload FROM candidates ORDER BY attempted ASC,seen DESC,rowid ASC')]
+        for item in items:
+            if aggregator(item['url']):item['needs_original']=True
+            if RESULT_NOTICE.search(item['title']):item['notice_purpose']='결과·후속 안내'
+            elif NON_RECRUITMENT.search(item['title']):item['notice_purpose']='목록·운영 안내'
+        return items
 
     def queue(self, urls=None,kinds=None):
         items=self.items()

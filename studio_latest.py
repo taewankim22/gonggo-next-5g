@@ -60,7 +60,7 @@ def normalize_compact(data, pages=()):
         return records
     raw = {k:'' for k in ('공고명','공고유형','주최주관','접수방법','접수링크','접수마감','접수마감설명','활동기간')}
     raw.update({k:[] for k in ('지원조건','제출서류','일정','혜택','문의처','주의사항')})
-    raw.update(공고명=value('공고명'), 공고유형=TYPES.get(data.get('_classification',''), '기타'),
+    raw.update(공고명=value('공고명') or value('_verified_source_title'), 공고유형=TYPES.get(data.get('_classification',''), '기타'),
                주최주관=value('문의처_운영기관명'), 접수방법=value('지원방법'), 접수링크=value('지원링크'),
                접수마감=value('모집기간_종료일'))
     # Program names and contact organizations have different meanings.
@@ -97,6 +97,9 @@ def normalize_compact(data, pages=()):
     if value('장학금_총액'):
         raw['혜택'].append({'내용':'금액·지급 대상·지급 단위를 원문의 혜택 또는 시상표에서 확인해주세요.','금액범위':'미확인'})
     raw['주의사항']=[{'내용':LIMIT,'근거원문':'','근거페이지':''}]
+    if not value('공고명') and value('_verified_source_title'):
+        raw['주의사항'].append({'내용':'공고명은 원문 페이지 제목으로 표시했습니다. AI 제목 추출은 미확인입니다.',
+                              '근거원문':'','근거페이지':''})
     raw['주의사항'] += [{'내용':c,'근거원문':'','근거페이지':''} for c in data.get('_extract_conflicts',[])]
     raw['_workflow_review']=data.get('_workflow_review','')
     raw['_studio_compact']=copy.deepcopy(data)
