@@ -167,7 +167,12 @@ def structured_documents(notice,pages):
         if not verified:stage=located['stage'] if located['source_found'] else UNKNOWN
         category=row.get('필수여부')
         if category not in ('필수','해당자만','선택'):category='대상·필수 여부 확인'
+        description=row.get('제출설명','')
+        description_verified=verified and bool(description) and normalize(description) in normalize(quote)
+        text=' · '.join(v for v in (name,row.get('적용대상',''),description if description_verified else '') if v)
         result.append({'id':ident,'text':text,'name':name,'category':category,'stage':stage,
+            'target':row.get('적용대상',''),'requirements':description if description_verified else '',
+            'requirements_candidate':description,'category_verified':verified,'requirement_verified':description_verified,
             'source_page':page if verified else located['source_page'],'source_quote':quote if verified else located['source_quote'],
             'stage_quote':located.get('stage_quote','') or quote,'stage_page':located.get('stage_page','') or page,
             'source_found':verified or located['source_found'],'stage_reason':'원문 근거와 제출 단계 확인' if verified else located.get('stage_reason','원문 확인 필요')})

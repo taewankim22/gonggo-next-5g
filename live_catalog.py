@@ -29,6 +29,7 @@ class LiveCatalog:
             db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, busy INTEGER NOT NULL, updated REAL NOT NULL, trace TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS scans (url TEXT PRIMARY KEY, manifest TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS content_analyses (id TEXT PRIMARY KEY, analysis TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS revisions (id INTEGER PRIMARY KEY, record_id TEXT, previous TEXT, checked_at TEXT)')
 
     @contextmanager
     def connect(self):
@@ -73,7 +74,7 @@ class LiveCatalog:
                     source_hash=record['sha256'], source_filename=record['filename'], source_info=analysis['source_info'],
                     evidence_basis=record['evidence_basis'], notice_config=analysis['config'],
                     notice_trace=analysis['notice_trace'],
-                    catalog_source={k:record[k] for k in ('source_url','checked_at','document_name','coverage_note')},
+                    catalog_source={k:stored.get(k,'') for k in ('source_url','document_url','id','checked_at','analyzed_at','document_name','coverage_note','source_changes')},
                     last_mode='실제 AI 분석', screen=2)
 
     def claim(self, job, now=None):
@@ -99,6 +100,17 @@ class LiveCatalog:
 
     def publish(self, record, analysis, data):
         with self.connect() as db:
+            old=db.execute('SELECT record,analysis FROM records WHERE id=?',(record['id'],)).fetchone()
+            if old:
+                previous,prior=json.loads(old[0]),json.loads(old[1])
+                if previous.get('sha256')!=record['sha256']:
+                    from preparation_model import compare_sources
+                    record['source_changes']=compare_sources(previous,prior,record,analysis)
+                    db.execute('INSERT INTO revisions (record_id,previous,checked_at) VALUES (?,?,?)',
+                               (record['id'],json.dumps({'record':previous,'analysis':prior},ensure_ascii=False),record['checked_at']))
+                elif previous.get('config')==record.get('config'):
+                    record['source_changes']=previous.get('source_changes',{})
+            if not old:record['source_changes']={'status':'baseline','items':[]}
             db.execute('INSERT OR REPLACE INTO records VALUES (?,?,?,?)',
                        (record['id'],json.dumps(record,ensure_ascii=False),json.dumps(analysis,ensure_ascii=False),data))
             key=fingerprint([record['sha256'],record['config']])

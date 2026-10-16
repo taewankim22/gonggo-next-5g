@@ -39,7 +39,8 @@ def available_record(root,record):
         return dict(notice=parsed['notice'],raw_notice=parsed['notice'],pages=parsed['pages'],pdf=data,
             source_hash=record['sha256'],source_filename=source.name,source_info=parsed.get('source_info',inspect_input(data,source.name)),
             evidence_basis=parsed.get('evidence_basis','Studio Parse'),notice_config=parsed['config'],
-            catalog_source={'url':record['source_url'],'checked_at':record['checked_at']},
+            catalog_source={'url':record['source_url'],'checked_at':record['checked_at'],'id':record['id'],
+                            'document_name':record.get('document_name',source.name),'analyzed_at':parsed.get('analyzed_at','')},
             last_mode='실제 AI 분석',screen=2,notice_trace=parsed.get('notice_trace',{}))
     except (KeyError,ValueError,OSError):return None
 

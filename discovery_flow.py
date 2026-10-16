@@ -7,7 +7,7 @@ from upstage_client import StudioError
 from web_notice import prepare_article, article_url
 
 
-def refresh_latest(root, connection, limit=3, progress=None, candidates=None, national=False):
+def refresh_latest(root, connection, limit=3, progress=None, candidates=None, national=False, document_urls=None):
     if not connection or not connection.get('enabled'):
         raise ValueError('실제 AI 분석 모드와 Upstage 연결을 확인해주세요.')
     if not isinstance(limit,int) or not 1<=limit<=100:raise ValueError('분석 묶음 크기를 다시 선택해주세요.')
@@ -37,6 +37,7 @@ def refresh_latest(root, connection, limit=3, progress=None, candidates=None, na
             cache.save_scan(manifest);summary['failed']+=1;summary['notices'].append(manifest)
             continue
         manifest.update(title=article['title'],checked_at=article['checked_at'],warnings=list(article['warnings']),
+                        attachments=article.get('attachments',[]),
                         resolved_url=article.get('resolved_url',url))
         if article.get('attachment_limit_reached'):
             manifest['warnings'].append('첨부는 처음 5개까지 수집했습니다. 나머지는 원문에서 확인해주세요.')
@@ -48,6 +49,13 @@ def refresh_latest(root, connection, limit=3, progress=None, candidates=None, na
         for index,doc in enumerate(manifest['documents']):
             prefix=f'{position}/{summary["selected"]} 공고 · 문서 {index+1}/{len(manifest["documents"])}'
             report(prefix+' · '+doc['name'])
+            if document_urls is not None and doc['url'] not in document_urls:
+                # A targeted retry must not charge for a different, newly changed file.
+                match=next((r for r in cache.records() if r.get('source_url')==url and
+                            r.get('document_url')==doc['url'] and r.get('sha256')==doc['sha256'] and r.get('config')==config),None)
+                if match:doc.update(status='ready',record_id=match['id'])
+                cache.save_scan(manifest)
+                continue
             try:
                 record,reused=analyze_public(root,article,index,connection['agent_id'],connection['version'],
                     connection['runner'],lambda message:report(prefix+' · '+message))

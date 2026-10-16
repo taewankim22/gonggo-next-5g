@@ -107,6 +107,8 @@ def render_situation(notice,pages,mode,go):
         answers['review_stage']=st.selectbox('현재 지원 단계',STAGES,key='answer_review_stage')
     stage=answers.get('review_stage',STAGES[0])
     model=build_questionnaire(notice,pages,{'selected_center':state.get('answer_selected_center','')},stage)
+    focus=next((r for r in state.get('preparation',{}).get('condition_rows',[]) if r['id']==state.get('_prep_focus_condition')),None)
+    if focus:st.info('준비 목록에서 선택한 조건: '+focus['label'])
 
     def draw_extra(q,optional=False):
         widget='question_'+scope+'_'+q['id'];source=q['question']
@@ -147,6 +149,11 @@ def render_situation(notice,pages,mode,go):
             if profile_unknown and c['field'] in NUMERIC and unknown_widget not in state:state[unknown_widget]=True
         elif q['kind']=='basic':origin=state.get('profile_provenance',{}).get(q['key'],'')
         with st.container(key='situation_item_'+q['id']):
+            if focus and q['rule']==focus.get('rule'):
+                st.markdown('**준비 목록에서 선택한 질문**')
+                if state.pop('_prep_focus_condition',None):
+                    from ui_focus import queue_focus
+                    queue_focus('.st-key-situation_item_'+q['id'])
             if origin=='공통 프로필':badge()
             context=' · '.join(v for v in (q.get('period'),q['condition'].get('scale','')+'점 만점' if q['kind']=='profile' and q['condition'].get('scale') else '') if v)
             if context:st.markdown('**기준: '+context+'**')
@@ -187,6 +194,7 @@ def render_situation(notice,pages,mode,go):
 
     for group in GROUPS:
         questions=[q for q in model['current'] if q['group']==group]
+        if focus:questions.sort(key=lambda q:q['rule']!=focus.get('rule'))
         if not questions:continue
         with st.container(border=True,key='situation_group_'+str(GROUPS.index(group))):
             st.markdown('### '+group)

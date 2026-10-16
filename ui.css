@@ -159,3 +159,24 @@ h1.overview-title{font-size:clamp(1.45rem,2.5vw,1.9rem)!important;font-weight:80
  .st-key-calendar_controls [data-testid="stColumn"]:nth-child(2){grid-column:1/-1;grid-row:1}
  .st-key-catalog_filters [data-testid="stHorizontalBlock"]{gap:8px!important}
 }
+/* Step 4: actionable preparation with bounded source coverage. */
+.prep-notice-title{font-size:1.2rem;font-weight:700;line-height:1.5;overflow-wrap:anywhere;margin:0 0 12px}
+.prep-change{border:1px solid #f5cee0;background:#fff2f8;color:#a8195b;padding:16px 20px;border-radius:14px;font-weight:650}
+.prep-coverage{padding:14px 18px;border:1px solid var(--line);border-radius:14px;background:white;font-size:.9rem;font-weight:600}
+.prep-tags{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+[class*="st-key-prep_document_"]{background:#fff;border-radius:16px!important;padding:20px!important;gap:8px!important}
+[class*="st-key-prep_document_"] [data-testid="stCheckbox"] label{min-height:44px;font-weight:650}
+[class*="st-key-prep_document_"] [data-testid="stCheckbox"] p{font-size:1rem;font-weight:650}
+[class*="st-key-prep_action_"]{background:white;border-radius:16px!important;padding:18px 20px!important}
+[class*="st-key-prep_action_"] p{overflow-wrap:anywhere;margin-bottom:5px}
+[class*="st-key-prep_action_"] button{min-height:44px!important;white-space:normal}
+.st-key-prep_empty{background:#fff;padding:32px!important;text-align:center;border-radius:18px!important}
+.st-key-prep_metrics h3{font-size:1.25rem!important;padding-top:6px!important}
+@media(max-width:640px){
+ [class*="st-key-prep_action_"] [data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:column!important}
+ [class*="st-key-prep_action_"] [data-testid="stColumn"]{width:100%!important;min-width:0!important;flex:none!important}
+ [class*="st-key-prep_document_"]{padding:15px!important}
+ .prep-notice-title{font-size:1rem}
+ [data-baseweb="tab-list"]{overflow-x:auto!important;gap:6px!important}
+}
+[class*="st-key-prep_document_"],.st-key-prep_sources,[class*="st-key-situation_item_"]{scroll-margin-top:85px}

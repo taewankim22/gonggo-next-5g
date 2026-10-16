@@ -90,7 +90,7 @@ def test_preset_survives_rerun_and_answer_change_invalidates_result():
     assert at.text_input(key='answer_selected_center').value=='다른 기관'
     assert at.radio(key='answer_enrollment_status').value=='재학'
     at.button(key='nav_4').click().run()
-    next(b for b in at.button if b.label=='내 조건과 대조하기').click().run()
+    next(b for b in at.button if b.label=='AI로 추가 검토하기').click().run()
     assert not at.exception
     cards=at.session_state['result']
     assert next(c for c in cards if c['key']=='preference')['status']=='해당 없음'
@@ -146,7 +146,7 @@ def test_actual_hwp_checklist_state_updates_and_invalidates_ai_result():
     item=next(i for i in document_items(d['notice'],pages) if '발표자료' in i['name'])
     widget='doc_'+scope+'_'+item['id']+'_done'
     at.button(key='nav_4').click().run()
-    next(b for b in at.button if b.label=='내 조건과 대조하기').click().run()
+    next(b for b in at.button if b.label=='AI로 추가 검토하기').click().run()
     assert 'result' in at.session_state
     at.checkbox(key=widget).check().run()
     assert not at.exception and 'result' not in at.session_state
@@ -175,7 +175,7 @@ def test_four_screens_preserve_answers_file_checklist_and_review_without_api():
     applies=next(c for c in at.selectbox if str(c.key).endswith('_applies'))
     apply_key=applies.key
     applies.select('해당').run()
-    next(b for b in at.button if b.label=='내 조건과 대조하기').click().run()
+    next(b for b in at.button if b.label=='AI로 추가 검토하기').click().run()
     assert 'result' in at.session_state
     with patch('upstage_client.run_agent',side_effect=AssertionError('Navigation must not call API')):
         for step in [1,2,3]:at.button(key=f'nav_{step}').click().run()

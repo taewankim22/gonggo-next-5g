@@ -206,6 +206,8 @@ if screen==1:
                 checkpoint(st.session_state);clear_active(st.session_state);clear_answers()
                 st.session_state.update(notice=map_image_page(n,info),raw_notice=dict(n),pages=pages,pdf=data,source_hash=fingerprint(data),source_info=info,source_filename=filename,notice_trace=trace,evidence_basis='Studio Parse 변환 본문' if n.get('_structured_notice') and any(ocr_pages) else 'PDF 텍스트' if info['pages'] and any(info['pages']) else 'Studio Parse 변환 본문' if info['kind']=='hangul' else 'Studio Parse OCR')
                 st.session_state.update(last_mode=mode,notice_config={'agent_id':notice_id,'config_id':notice_version})
+                from datetime import datetime,timezone
+                st.session_state.catalog_source={'analyzed_at':cached.get('catalog_source',{}).get('analyzed_at','') if cached else datetime.now(timezone.utc).isoformat()}
                 st.session_state.update(retained)
                 go(2);st.session_state.pop('_notice_request',None);st.rerun()
             except (ValueError,StudioError) as exc:
@@ -218,7 +220,7 @@ if screen in (2,3,4) and st.session_state.get('notice'):
     from workflow_adapter import ground_notice
     st.session_state.notice = ground_notice(st.session_state.notice,st.session_state.get('pages',[]))
 
-if screen in (3,4) and st.session_state.get('notice',{}).get('_schema_limits'):
+if screen==3 and st.session_state.get('notice',{}).get('_schema_limits'):
         st.warning(st.session_state.notice['_schema_limits'])
 
 if screen==2:
@@ -286,96 +288,31 @@ if screen==3:
         st.rerun()
 
 if screen==4:
+        from preparation_ui import render_preparation
         n=st.session_state.notice
-        a=dict(st.session_state.draft_answers)
-        a['profile_facts']=applied_facts(n,st.session_state.get('common_profile',{}),st.session_state.get('profile_overrides',{}),a,st.session_state.get('profile_provenance',{}))
-        for fact in a.get('profile_facts',{}).values():
-            if fact['field']=='social_support' and has_social(n):fact.update(value=social_answer(a),origin=st.session_state.get('profile_provenance',{}).get('social_support','이번 공고 답변'))
-        if a.get('profile_revision')!=fingerprint(st.session_state.get('common_profile',{})):
-            st.warning('공통 프로필이 바뀌었습니다. 3단계에서 적용 답변을 다시 확인해주세요. 이전 AI 결과는 표시하지 않습니다.')
-            st.session_state.pop('result',None)
-        stage=a.get('review_stage',STAGES[0])
-        items=document_items(n,st.session_state.pages)
-        scope=st.session_state.source_hash[:12]
-        st.header('나의 지원 준비')
-        summary=st.container()
-        condition_panel=st.container()
-        st.markdown('<div id="checklist" class="section-anchor"></div>',unsafe_allow_html=True)
-        st.markdown('### 제출서류 체크리스트')
-        with st.popover('체크리스트 안내'):
-            st.write('체크는 본인이 표시한 준비 상태입니다. 서류 내용·유효성·실제 접수 여부를 검증한 것이 아닙니다. 분류는 공고 추출 문구 기준이므로 원문과 함께 확인하세요.')
-        states={}
-        def draw_document(item):
-            with st.container(border=True,key='document_card_'+scope+'_'+item['id']):
-                value={}
-                prefix='doc_'+scope+'_'+item['id']
-                # Migrate prior multi-state preparation values into a simple checkbox.
-                if prefix+'_done' not in st.session_state:
-                    st.session_state[prefix+'_done']=st.session_state.get(prefix+'_ready') in ('준비 완료','제출 완료')
-                linked_social=has_social(n) and social_document(item) and item['category']!='필수'
-                applicability=(social_answer(a) or '아직 모름') if linked_social else st.session_state.get(prefix+'_applies','아직 모름') if item['category']!='필수' else '해당'
-                done=st.checkbox(item['name']+' · 준비 완료',key=prefix+'_done',disabled=applicability=='해당 없음')
-                if linked_social:
-                    value['applicability']=applicability
-                    with st.popover('우대 대상 답변 확인'):
-                        st.write('대상 여부: '+('확인 필요' if applicability=='아직 모름' else applicability)+' · 대상 여부는 3단계에서 수정하세요. 선택서류는 모든 사람의 필수서류가 아닙니다.')
-                elif item['category'] in ('해당자만','선택','대상·필수 여부 확인'):
-                    value['applicability']=st.selectbox('적용 대상 확인 · '+item['name'],['아직 모름','해당','해당 없음'],key=prefix+'_applies')
-                else:value['applicability']='해당'
-                applicability=value['applicability']
-                value['readiness']='준비 완료' if done and applicability!='해당 없음' else '아직 확인하지 않음'
-                status='해당 없음' if applicability=='해당 없음' else '준비 완료' if done else '확인 필요'
-                st.markdown('<div class="document-tags"><span class="doc-kind">'+html.escape(item['category'])+'</span><span class="doc-kind">'+html.escape(item['stage'])+'</span>'+status_badge(status)+'</div>',unsafe_allow_html=True)
-                states[item['id']]=value
-                with st.expander('근거 확인 · '+item['name']):
-                    if item['source_found']:
-                        st.caption('문서에서 제출물 이름을 찾은 '+item['source_page']+'쪽 주변 구간입니다. 적용 대상·필수 여부까지 자동 검증한 것은 아닙니다.')
-                        st.text(item['source_quote'])
-                    else:st.warning('추출된 제출물 이름을 원문에서 자동으로 찾지 못했습니다. 원문과 운영기관 안내를 확인하세요.')
-                    st.caption('제출 시점 근거 · '+(item.get('stage_page') or '미확인')+'쪽')
-                    st.text(item.get('stage_quote') or '제출 시점을 확정할 근거 없음')
-                    st.caption(item.get('stage_reason',''))
-        from planning import later_item
-        for item in items:
-            if not later_item(item,stage) and item['stage']!=UNKNOWN_STAGE:draw_document(item)
-        uncertain_items=[i for i in items if i['stage']==UNKNOWN_STAGE]
-        if uncertain_items:
-            with st.expander(f'제출 시점 확인 필요 {len(uncertain_items)}개 — 현재 필수 누락으로 계산하지 않음'):
-                for item in uncertain_items:draw_document(item)
-        later_items=[i for i in items if later_item(i,stage)]
-        if later_items:
-            with st.expander(f'이후 단계 제출물 {len(later_items)}개 — 지금 누락으로 계산하지 않음'):
-                for item in later_items:draw_document(item)
-        if not items:st.info('구체적인 제출서류 목록이 추출되지 않았습니다. 서류가 필요 없다는 뜻은 아닙니다. 상세 공고를 확인하세요.')
-        rows=checklist_snapshot(items,states,stage)
-        a['document_checklist']=rows
-        a['independent_conditions']=condition_rows(n,a,st.session_state.pages)
-        # Pass all readiness states to Studio as user assertions, never as verified documents.
-        a['other_facts']+='\n제출물 준비 상태(본인 확인):\n'+'\n'.join(r['text']+' / 적용: '+r['applicability']+' / 상태: '+r['readiness']+' / 제출 단계: '+r['stage'] for r in rows)
+        a,rows,steps,prepared_text=render_preparation(ROOT,{'enabled':mode=='실제 AI 분석' and bool(team or api_key),
+            'agent_id':notice_id,'version':notice_version,'runner':discovery_runner},go)
         current=fingerprint({'logic_version':RULE_VERSION,'source':st.session_state.source_hash,'answers':a,'mode':mode,'review_agent':review_id,'version':review_version})
         if st.session_state.get('review_hash')!=current:st.session_state.pop('result',None)
-        steps=next_steps(n,a,rows,st.session_state.get('result'))
-        with condition_panel:
-            render_conditions(a['independent_conditions'],scope)
-        with summary:
-            render_preparation_summary(n,rows,steps)
-        st.session_state.preparation={'answers':a,'checklist':rows,'condition_rows':a['independent_conditions'],'next_actions':steps}
-        st.download_button('내 준비 목록 저장 (TXT)',preparation_text(n,a,rows,steps),'5G_공고다음_준비목록.txt','text/plain')
-        st.caption('실제 AI 대조 시 답변과 체크리스트의 준비 상태를 Upstage로 전달합니다.')
-        if st.button('내 조건과 대조하기',type='primary',use_container_width=True):
-            st.session_state.pop('result',None)
-            try:
-                if mode=='예시 화면 체험':raw=sample_review(n,a)
-                else:
-                    pdf=comparison_pdf(n,a); st.session_state.review_pdf=pdf
-                    progress=st.empty();review_trace={}
-                    raw=run_agent(api_key,review_id,review_version,pdf,'comparison.pdf',progress.info,trace=review_trace)
-                    st.session_state.review_trace=review_trace
-                    raw=validate_payload(raw,review_schema());progress.empty()
-                cards=guard_review(n,a,raw,st.session_state.pages)
-                st.session_state.update(result=cards,profile=a,review_hash=current,raw_review=raw)
-                st.rerun()
-            except (ValueError,StudioError) as exc:st.error(str(exc))
+        with st.expander('추가 AI 검토·준비 목록 저장'):
+            st.download_button('내 준비 목록 저장 (TXT)',prepared_text,'5G_공고다음_준비목록.txt','text/plain')
+            st.write('추가 AI 검토 시 현재 문서의 조건과 답변·준비 상태를 Upstage로 전달합니다. 자료별 근거와 함께 확인해주세요.')
+            if st.button('AI로 추가 검토하기',key='prep_ai_review',use_container_width=True):
+                st.session_state.pop('result',None)
+                try:
+                    from preparation_model import selected_review_answers
+                    a=selected_review_answers(a,n,st.session_state.pages,st.session_state.draft_answers.get('other_facts',''))
+                    if mode=='예시 화면 체험':raw=sample_review(n,a)
+                    else:
+                        pdf=comparison_pdf(n,a);st.session_state.review_pdf=pdf
+                        progress=st.empty();review_trace={}
+                        raw=run_agent(api_key,review_id,review_version,pdf,'comparison.pdf',progress.info,trace=review_trace)
+                        st.session_state.review_trace=review_trace
+                        raw=validate_payload(raw,review_schema());progress.empty()
+                    cards=guard_review(n,a,raw,st.session_state.pages)
+                    st.session_state.update(result=cards,profile=a,review_hash=current,raw_review=raw)
+                    st.rerun()
+                except (ValueError,StudioError) as exc:st.error(str(exc))
 
 if screen==4 and 'result' in st.session_state:
     st.session_state.result=guard_review(st.session_state.notice,st.session_state.profile,st.session_state.raw_review,st.session_state.pages)
@@ -434,5 +371,8 @@ if st.session_state.get('rendered_screen') != screen:
     </script>""", unsafe_allow_javascript=True)
     st.session_state.rendered_screen=screen
 
+if screen in (3,4):
+    from ui_focus import render_focus
+    render_focus()
 checkpoint(st.session_state)
 save_browser()
