@@ -175,6 +175,7 @@ h1.overview-title{font-size:clamp(1.45rem,2.5vw,1.9rem)!important;font-weight:80
 .prep-metric-value{font-size:1.15rem;font-weight:800;line-height:1.45;letter-spacing:-.035em;overflow-wrap:anywhere}
 .prep-metric-foot{margin-left:58px}
 .st-key-prep_metrics [data-testid="stProgress"]{padding-left:58px}
+.st-key-prep_metrics [data-testid="stProgressBarTrack"]{background:#eceef2!important;border-radius:6px;overflow:hidden}
 .st-key-prep_metrics [data-testid="stPopover"],.st-key-prep_metrics [data-testid="stLinkButton"]{padding-left:58px}
 .st-key-prep_metrics [data-testid="stLinkButton"] a{color:var(--pink)!important;background:transparent!important;border:0!important;padding:0!important;min-height:32px!important;text-decoration:underline;font-size:.8rem}
 .prep-pill{display:inline-block;padding:4px 10px;border-radius:100px;font-size:.74rem;line-height:1.5;font-weight:700;white-space:normal}
@@ -185,8 +186,7 @@ h1.overview-title{font-size:clamp(1.45rem,2.5vw,1.9rem)!important;font-weight:80
 .st-key-prep_sources [data-testid="stExpander"],.st-key-prep_sources details{border:0!important;background:transparent}
 .st-key-prep_sources [data-testid="stExpander"] summary{padding:6px 0!important;min-height:28px;justify-content:flex-end;font-size:.8rem;color:#4f5b70}
 .st-key-prep_sources [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"]{flex:none;font-size:.8rem}
-.st-key-prep_sources>[data-testid="stLayoutWrapper"]:has(>[data-testid="stExpander"]){margin-top:-30px}
-.st-key-prep_sources .prep-coverage{padding-right:210px}
+.st-key-prep_sources>[data-testid="stLayoutWrapper"]:has(>[data-testid="stExpander"]){margin-top:3px}
 .st-key-prep_action_list{padding:0!important;gap:0!important;border-color:#dce1e9!important;border-radius:15px!important;background:white;overflow:hidden}
 [data-testid="stVerticalBlock"][class*="st-key-prep_action_"]:not(.st-key-prep_action_list){padding:17px 20px!important;border-bottom:1px solid #eceff4;gap:0!important}
 [data-testid="stVerticalBlock"][class*="st-key-prep_action_"]:not(.st-key-prep_action_list):last-child{border-bottom:0}
@@ -232,8 +232,6 @@ h1.overview-title{font-size:clamp(1.45rem,2.5vw,1.9rem)!important;font-weight:80
  [class*="st-key-prep_document_"]:not([class*="st-key-prep_document_list_"]){padding:12px!important}
  .prep-doc-title strong{font-size:.9rem}.prep-doc-title{gap:5px}.prep-pill{font-size:.7rem;padding:3px 8px}
  .prep-coverage{gap:8px;font-size:.8rem}
- .st-key-prep_sources .prep-coverage{padding-right:0}
- .st-key-prep_sources>[data-testid="stLayoutWrapper"]:has(>[data-testid="stExpander"]){margin-top:0}
 }
 
 .st-key-prep_doc_tabs [role="tablist"]{border-bottom:0!important}.st-key-prep_doc_tabs [role="tab"]::after{display:none!important}
