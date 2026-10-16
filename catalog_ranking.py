@@ -17,7 +17,9 @@ def priority(record, review, profile, today=None):
     words=re.split(r'[,，/;\n]+',str(fact.get('value') or '')) if fact.get('state')=='known' else []
     text=normalize(record['title']+' '+' '.join(str(x) for x in record.get('tags',[])))
     interest=any(len(normalize(w))>=2 and normalize(w) in text for w in words)
-    expired=status_label(record,today)=='과거 검증 사례'
+    from deadline_calendar import group_status
+    expired=(group_status(record['_calendar'],today)=='마감' if '_calendar' in record
+             else status_label(record,today)=='과거 검증 사례')
     label='자격 불일치 확인' if conflict else '조건 일부 일치' if matched else '확인 필요'
     reasons=[]
     if expired:reasons.append('마감일이 지난 공고')
@@ -68,6 +70,8 @@ def personalized_catalog(root, records, profile, today=None):
             if len(dates)>1:
                 representative['deadline']='';cautions.append('문서 간 마감일이 다릅니다. 적용되는 접수 일정을 원문에서 확인해주세요.')
             elif dates:representative['deadline']=next(iter(dates))
+        from deadline_calendar import group_deadlines
+        representative['_calendar']=group_deadlines(root,valid,scan)
         order=priority(representative,review,profile,today)
         if not valid:order.update(label='분석 확인 필요',key=(True,True,True,True,True,True,'9999-12-31',representative['title']))
         out.append(dict(record=representative,documents=valid,result=review,priority=order,cautions=cautions))

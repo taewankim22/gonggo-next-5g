@@ -40,7 +40,7 @@ def run_agent(*args,**kwargs):
 # Authenticate before restoring any browser draft or rendering app controls.
 # Retain inputs independently of Streamlit's cleanup for hidden widgets.
 for state_key in list(st.session_state):
-    if state_key.startswith(('answer_', 'question_', 'doc_', 'fact_')) or state_key in ('profile_preset','schedule_state','show_later_questions'):
+    if state_key.startswith(('answer_', 'question_', 'doc_', 'fact_', 'catalog_document_')) or state_key in ('profile_preset','schedule_state','show_later_questions','catalog_kind','catalog_status','catalog_search','catalog_view','calendar_month','calendar_day'):
         st.session_state[state_key] = st.session_state[state_key]
 bootstrap()
 st.session_state.setdefault('screen', 1)

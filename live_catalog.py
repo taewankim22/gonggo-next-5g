@@ -167,6 +167,8 @@ def analyze_public(root, article, document_index, agent_id, version, runner, pro
                       warnings=article['warnings'], attachment_count=len(article['attachments']))
         record.update(source_name=article.get('source_name',''),source_kind=article.get('source_kind','등록 기관 게시판'),
                       resolved_url=article.get('resolved_url',article['url']))
+        from deadline_calendar import document_deadlines
+        record['deadline_details']=document_deadlines(notice,pages,record)
         analysis = dict(source_hash=sha, notice=notice, pages=pages, source_info=info, config=config,
                         notice_trace=dict(trace),analyzed_at=analyzed_at)
         cache.publish(record,analysis,data)
