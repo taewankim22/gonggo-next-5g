@@ -246,7 +246,7 @@ def render_preparation(root,connection,go):
         with st.container(key='prep_sources'):render_sources(root,bundle,connection,go)
     with actions_panel:
         st.markdown('### 지금 할 일')
-        if expired:st.write('마감된 공고예요. 아래는 조건 확인과 준비 기록을 위한 안내입니다.')
+        if expired:st.write('지원 접수는 마감됐어요. 현재 활동 단계의 서류를 확인해주세요.' if stage in STAGES[-2:] else '마감된 공고예요. 아래는 조건 확인과 준비 기록을 위한 안내입니다.')
         for i,action in enumerate(actions):
             with st.container(border=True,key='prep_action_'+str(i)):
                 copy,button=st.columns([4,1.3],vertical_alignment='center')

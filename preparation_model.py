@@ -162,7 +162,7 @@ def preparation_actions(bundle,rows,conditions,answers,expired=False):
     if unclear:add('자료마다 서류 안내가 달라요',unclear['name'],'document','근거 비교',doc_id=unclear['id'])
     # An expired or already-submitted application must not receive an urgent application-prep CTA.
     stage=answers.get('review_stage',STAGES[0])
-    preparing=not expired and stage not in ('서류 제출 후','면접 준비 중')
+    preparing=(not expired or stage in STAGES[-2:]) and stage not in ('서류 제출 후','면접 준비 중')
     pending=[r for r in rows if r['bucket']=='현재 단계' and r['category']=='필수' and r['applicability']=='해당'
              and r['readiness']!='준비 완료' and r['source_found'] and not r.get('conflict') and not r.get('stale')]
     if preparing and pending:add(pending[0]['name']+' 준비 상태를 확인해주세요','확인된 현재 단계 필수 서류예요.','document','서류 확인',doc_id=pending[0]['id'])

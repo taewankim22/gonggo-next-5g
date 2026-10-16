@@ -47,6 +47,9 @@ def test_stages_and_deadline_actions_are_distinct():
     n,x=actual('evidence_hackathon21');b=bundle(n,x['pages']);rows=document_rows(b,'지원 준비 중',{}, {})
     steps=preparation_actions(b,rows,[],{'review_stage':'지원 준비 중'},expired=True)
     assert not any(a['target']=='document' for a in steps)
+    selected=document_rows(b,'선발 후·활동 중',{}, {})
+    later_actions=preparation_actions(b,selected,[],{'review_stage':'선발 후·활동 중'},expired=True)
+    assert any(a['target']=='document' and 'IR Deck' in a['title'] for a in later_actions)
 
 
 def test_checked_requirement_change_preserves_record_but_excludes_completion():
