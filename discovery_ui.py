@@ -11,7 +11,8 @@ def show_summary(summary):
     if not summary['selected']:
         st.info('자동 분석할 모집 원문을 확보하지 못했습니다. 발견한 후보에서 주최기관 원문을 연결해주세요.')
     elif summary['failed'] or any(not n['complete'] for n in summary['notices']):
-        st.warning(message+f' · 미완료 {summary["failed"]}건 (첨부 경고 포함 상세 확인)')
+        incomplete=sum(not n['complete'] for n in summary['notices'])
+        st.warning(message+f' · 확인 필요 {incomplete}개 공고 (원문·첨부 경고는 상세 확인)')
     else:st.success(message+' · 내 정보로 목록을 정렬했습니다.')
     with st.expander('이번 분석 내역'):
         for notice in summary['notices']:

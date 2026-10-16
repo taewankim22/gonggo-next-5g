@@ -40,3 +40,14 @@ def test_multi_document_benefits_deduplicate_without_adding_amounts(monkeypatch)
     assert [r['text'] for r in result['benefits']] == ['대상 300만원 · 1팀', '총상금 1,000만원']
     assert result['benefits'][1]['document'] == 'c'
     assert public_summary(ROOT, {'documents': []})['benefits'] == []
+
+
+def test_blank_application_choices_do_not_become_audience_summary(monkeypatch):
+    records=[{'id':'form','title':'창업 경진대회','document_name':'2026년-창업경진대회-신청서-양식.hwp'},
+             {'id':'notice','title':'창업 경진대회','document_name':'2026-창업경진대회-공고문_최종.pdf'}]
+    notices={'form':{'eligibility_rule':'□ 재학 중 □ 휴학, 졸업, 졸업유예 등'},
+             'notice':{'eligibility_rule':'본교 대학(원) 재학생, 2인 이상의 팀'}}
+    monkeypatch.setattr('catalog_summary.available_record',lambda root,r:{'notice':notices[r['id']]})
+    summary=public_summary(ROOT,{'documents':records})
+    assert [r['text'] for r in summary['audience']]==['본교 대학(원) 재학생, 2인 이상의 팀']
+    assert len(records)==2

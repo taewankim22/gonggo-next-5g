@@ -110,3 +110,14 @@ def test_legacy_press_analysis_stays_stored_but_is_not_a_recruitment_card(tmp_pa
     ds.remember([dict(url=a['url'],title=a['title'],source_name='웹 검색',needs_original=False)])
     assert ds.items()[0]['needs_original'] and not ds.queue()
     assert LiveCatalog(tmp_path).records()==stored
+
+
+def test_ssu_short_extension_blocks_previous_attachment_deadline():
+    from deadline_calendar import document_deadlines,consolidate
+    r={'id':'body','source_url':'https://scatch.ssu.ac.kr/notice'}
+    body=document_deadlines({},['2026년 창업아이디어 경진대회\n□ 신청기간 : ~ 10. 14.(수) 오후 2시까지 모집연장\n트랙2 모집연장, 트랙1 모집마감'],r)
+    attached=document_deadlines({},['신청기간 : 2026. 9. 1. ~ 2026. 10. 12. 13:00까지'],{**r,'id':'pdf'})
+    assert body['ambiguous'] and not body['events']
+    assert attached['events'][0]['date']=='2026-10-12'
+    combined=consolidate([body,attached])
+    assert combined['category']=='마감일 확인 필요' and not combined['events']

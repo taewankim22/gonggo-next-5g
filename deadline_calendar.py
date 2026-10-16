@@ -85,7 +85,12 @@ def document_deadlines(notice,pages,record):
         if re.search(r'예산\s*소진',quote):rolling='예산 소진 시 종료'
         elif re.search(r'상시\s*(?:모집|접수|신청)|수시\s*(?:접수|모집)',quote):rolling=rolling or '상시 모집'
         dates=dates_in(quote)
-        if not dates:continue
+        if not dates:
+            # An undated-year extension in the body must not disappear while
+            # an older attachment supplies a fully dated closing event.
+            if SHORT_DATE.search(quote) and re.search(r'까지|마감|연장|(?:접수|신청|모집)\s*기간',quote):
+                ambiguous=True
+            continue
         # Multiple labeled rounds on one line must not be collapsed to the last date.
         if len(set(re.findall(r'\d+\s*차',quote)))>1:
             ambiguous=True;continue

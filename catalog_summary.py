@@ -14,6 +14,12 @@ def public_summary(root, group):
     seen = {key: set() for key in fields}
     tags = []
     for record in group['documents']:
+        name=record.get('document_name','')+' '+record.get('filename','')
+        if (re.search(r'(?:신청|지원|참가|접수)서.{0,15}(?:양식|서식)',name)
+                and not re.search(r'공고문|모집요강|모집안내',name)):
+            # A blank form's checkboxes describe answer options, not the
+            # recruitment's audience. The form remains available for review.
+            continue
         state = available_record(root, record)
         if not state:
             continue
