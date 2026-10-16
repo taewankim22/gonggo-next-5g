@@ -45,6 +45,11 @@ for state_key in list(st.session_state):
 bootstrap()
 st.session_state.setdefault('screen', 1)
 def go(screen):
+    # A text edit and navigation click can arrive together. Finish collecting
+    # step 3's widget values before the destination consumes draft_answers.
+    if st.session_state.get('screen')==3 and screen!=3:
+        st.session_state['_next_screen']=screen
+        return
     st.session_state.screen = screen
     st.session_state.route = 'review'
 
@@ -195,15 +200,22 @@ if screen==1:
                 if not any(pages) or (n.get('_structured_notice') and any(ocr_pages)):pages=ocr_pages
                 from workflow_adapter import ground_notice
                 n=ground_notice(n,pages)
+                from workspaces import retain_same_document_inputs
+                retained=retain_same_document_inputs(st.session_state,fingerprint(data))
                 checkpoint(st.session_state);clear_active(st.session_state);clear_answers()
                 st.session_state.update(notice=map_image_page(n,info),raw_notice=dict(n),pages=pages,pdf=data,source_hash=fingerprint(data),source_info=info,source_filename=filename,notice_trace=trace,evidence_basis='Studio Parse 변환 본문' if n.get('_structured_notice') and any(ocr_pages) else 'PDF 텍스트' if info['pages'] and any(info['pages']) else 'Studio Parse 변환 본문' if info['kind']=='hangul' else 'Studio Parse OCR')
                 st.session_state.update(last_mode=mode,notice_config={'agent_id':notice_id,'config_id':notice_version})
+                st.session_state.update(retained)
                 go(2);st.session_state.pop('_notice_request',None);st.rerun()
             except (ValueError,StudioError) as exc:
                 st.session_state.pop('_notice_request',None)
                 st.error(str(exc))
     if 'notice' in st.session_state:
         st.button('분석한 공고 계속 보기 →',on_click=go,args=(2,),use_container_width=True)
+
+if screen in (2,3,4) and st.session_state.get('notice'):
+    from workflow_adapter import ground_notice
+    st.session_state.notice = ground_notice(st.session_state.notice,st.session_state.get('pages',[]))
 
 if screen in (3,4) and st.session_state.get('notice',{}).get('_schema_limits'):
         st.warning(st.session_state.notice['_schema_limits'])
@@ -252,6 +264,9 @@ if screen==2:
                         st.write('**'+title+'**')
                         from core import evidence
                         checked=[{**r,'인용 대조':'본문에서 확인' if evidence(r.get('근거원문',''),r.get('근거페이지',''),st.session_state.pages) else '원문 직접 확인 필요'} for r in entries]
+                        if title=='혜택':
+                            from notice_facts import benefit_rows
+                            checked=[{**r,'검토 상태':'금액·근거 확인 / 지급 인원·단위 추가 확인' if r['verified'] and r['scope_pending'] else '본문 대조 완료' if r['verified'] else '금액·인용 대조 필요'} for r in benefit_rows(n,st.session_state.pages)]
                         st.dataframe(checked,hide_index=True,use_container_width=True)
             else:
                 for k,label in [('eligibility','지원 대상'),('preference','우대조건'),('commitment','활동 의무'),('documents','제출서류'),('schedule','일정')]:
@@ -353,6 +368,10 @@ if screen==3:
         st.session_state.draft_answers=a
         st.button('준비 목록과 다음 행동 보기 →',type='primary',on_click=go,args=(4,),use_container_width=True)
         st.button('← 핵심 확인으로',on_click=go,args=(2,))
+        if '_next_screen' in st.session_state:
+            st.session_state.screen=st.session_state.pop('_next_screen')
+            st.session_state.route='review'
+            st.rerun()
 
 if screen==4:
         n=st.session_state.notice

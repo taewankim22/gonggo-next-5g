@@ -5,6 +5,14 @@ from core import fingerprint
 EXTRA={'profile_overrides','profile_seeded','profile_provenance','notice_config','catalog_source','profile_revision'}
 RUNTIME={'pdf','raw_notice','result','raw_review','review_hash','review_pdf','notice_trace','review_trace','profile','preparation'}
 
+
+def retain_same_document_inputs(state, source_hash):
+    """Keep explicit inputs on reanalysis, never derived decisions or other documents."""
+    if source_hash != state.get('source_hash'):return {}
+    return {k:deepcopy(v) for k,v in state.items() if
+            (k.startswith(('answer_','question_','doc_','fact_')) and k!='answer_use_example')
+            or k in ('profile_overrides','profile_seeded','profile_provenance','schedule_state')}
+
 def checkpoint(state):
     from browser_draft import single_snapshot
     record=single_snapshot(state)

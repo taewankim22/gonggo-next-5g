@@ -107,4 +107,4 @@ def test_actual_hwpx_source_heading_overrides_incorrect_current_stage():
     assert all(r['later'] for r in rows if '재무제표' in r['name'] or '채용확인서' in r['name'])
     assert not next(r for r in rows if r['name']=='구현제안서')['later']
     assert any(a['title']=='추가 제출자료 공지 확인' for a in next_steps(n,{},rows))
-    assert '전체총규모' in n['benefits'] and '장학금' not in n['benefits']
+    assert '전체 지원 규모' in n['benefits'] and '장학금' not in n['benefits']

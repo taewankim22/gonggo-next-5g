@@ -10,7 +10,7 @@ def explicit_date(date, text):
     except (ValueError,TypeError):
         return False
     y,m,d=value.year,value.month,value.day
-    year=rf'(?<!\d){y}\s*[년./-]\s*'
+    year=rf"(?<!\d)(?:{y}|['’‘]{str(y)[-2:]})\s*[년./-]\s*" if 2000<=y<2100 else rf'(?<!\d){y}\s*[년./-]\s*'
     month=rf'0?{m}\s*[월./-]\s*'
     day=rf'0?{d}(?:\s*일)?(?!\d)'
     if re.search(year+month+day,text):return True

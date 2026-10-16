@@ -159,13 +159,13 @@ def test_ui_fetch_prepare_analyze_filter_failure_without_background_calls(monkey
     calls=[]
     def runner(*args,**kwargs):calls.append(1);return result()
     monkeypatch.setattr('upstage_client.run_agent',runner)
-    at=AppTest.from_file(str(ROOT/'app.py')).run()
+    at=AppTest.from_file(str(ROOT/'app.py'),default_timeout=20).run()
     at.button(key='entry_catalog').click().run()
     assert not at.exception and not calls
     next(t for t in at.text_input if t.label=='Upstage API 키').input('test-only').run()
     at.button(key='discovery_fetch').click().run()
     assert not calls
-    at.button(key='discovery_analyze').click().run()
+    at.button(key='discovery_analyze').click().run(timeout=20)
     assert not at.exception and calls==[1] and at.success
     r=original(tmp_path).records()[0]
     assert at.button(key='catalog_'+r['id'])

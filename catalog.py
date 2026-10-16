@@ -34,6 +34,8 @@ def available_record(root,record):
         if fingerprint(data)!=record['sha256']:return None
         parsed=json.loads(extracted.read_text(encoding='utf-8'))
         if parsed['source_hash']!=record['sha256']:return None
+        from workflow_adapter import ground_notice
+        parsed['notice']=ground_notice(parsed['notice'],parsed['pages'])
         return dict(notice=parsed['notice'],raw_notice=parsed['notice'],pages=parsed['pages'],pdf=data,
             source_hash=record['sha256'],source_filename=source.name,source_info=parsed.get('source_info',inspect_input(data,source.name)),
             evidence_basis=parsed.get('evidence_basis','Studio Parse'),notice_config=parsed['config'],

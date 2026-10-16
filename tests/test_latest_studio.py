@@ -73,7 +73,7 @@ def test_invalid_final_instruct_does_not_silently_reuse_intermediate_decision():
 def test_pinned_versions_match_actual_exports():
     root=Path(__file__).parents[1]
     settings=json.loads((root/'settings.json').read_text('utf-8'))
-    for kind,version in [('notice',20),('review',4)]:
+    for kind,version in [('notice',21),('review',4)]:
         export=json.loads((root/f'agent_configs/{kind}.config{version}.export.json').read_text('utf-8'))['exportedFrom']
         assert settings[f'{kind}_agent_id']==export['workflowId']
         assert settings[f'{kind}_config_id']==str(export['configVer'])

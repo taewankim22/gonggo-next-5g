@@ -54,6 +54,9 @@ def restore_single(payload):
         raise ValueError('저장한 사용 모드를 확인할 수 없습니다.')
     if not isinstance(values.get('pages'),list) or not all(isinstance(p,str) for p in values['pages']):
         raise ValueError('원문 본문을 확인할 수 없습니다.')
+    if values.get('last_mode') != '예시 화면 체험':
+        from workflow_adapter import ground_notice
+        notice = ground_notice(notice,values['pages'])
     if not isinstance(values.get('source_info',{}),dict):raise ValueError('원본 정보 오류')
     if not isinstance(values.get('source_filename'),str):raise ValueError('파일 이름 오류')
     for k,v in values.items():

@@ -7,7 +7,7 @@ from core import fingerprint
 KST = dt.timezone(dt.timedelta(hours=9))
 APPLICATION = re.compile(r'접수|신청|응모|모집\s*기간|모집\s*마감|(?:상시|수시)\s*모집|(?:서류|작품|지원서|제안서)\s*제출')
 OTHER = re.compile(r'발표|면접|심사|활동\s*기간|활동\s*종료|문의|운영\s*시간|지원\s*자격|모집\s*대상|공모\s*분야|시상|모집\s*인원|모집\s*분야|선발\s*절차')
-FULL_DATE = re.compile(r'(?<!\d)(20\d{2})\s*[년./-]\s*(\d{1,2})\s*[월./-]\s*(\d{1,2})(?:\s*일)?(?!\d)')
+FULL_DATE = re.compile(r"(?<!\d)(20\d{2}|['’‘]\d{2})\s*[년./-]\s*(\d{1,2})\s*[월./-]\s*(\d{1,2})(?:\s*일)?(?!\d)")
 SHORT_DATE = re.compile(r'(?<!\d)(\d{1,2})\s*[월./-]\s*(\d{1,2})(?:\s*일)?(?!\d)')
 TIME = re.compile(r'(?<!\d)([01]?\d|2[0-3])(?:\s*:\s*([0-5]\d)(?!\d)|\s*시(?:\s*([0-5]?\d)\s*분)?)(?!\d)')
 
@@ -22,10 +22,12 @@ def source_blocks(pages):
         lines = page.splitlines()
         for i, line in enumerate(lines):
             if re.search(r'(?:신청|응모|지원|참가)\s*(?:자격|대상)|신청자\s|응모자\s',line):continue
+            if re.search(r'실적\s*인정\s*기간|지원구간',line) and not re.search(r'(?:접수|신청)\s*마감',line):continue
             if not APPLICATION.search(line) or (OTHER.search(line) and not re.search(r'접수|신청|응모',line)):
                 continue
             block = [line]
             for following in lines[i+1:i+5]:
+                if line.lstrip().startswith('|') and following.lstrip().startswith('|'):break
                 if OTHER.search(following) or APPLICATION.search(following): break
                 block.append(following)
             text = '\n'.join(block).strip()
@@ -39,11 +41,14 @@ def dates_in(text):
     """Explicit dates plus a short range end with a local, explicit start year."""
     found=[]
     for match in FULL_DATE.finditer(text):
-        try: date=dt.date(*map(int,match.groups()))
+        try:
+            year,month,day=match.groups()
+            year=int(year) if year.isdigit() else 2000+int(year[1:])
+            date=dt.date(year,int(month),int(day))
         except ValueError: continue
         found.append((match.start(),match.end(),date))
         tail=text[match.end():]
-        connector=re.match(r'\s*\.?\s*(?:\([^)]{1,4}\))?\s*(?:[~～∼–-]|부터)\s*',tail)
+        connector=re.match(r'\s*\.?\s*(?:\([^)]{1,4}\))?\s*(?:(?:[01]?\d|2[0-3])(?:시|:[0-5]\d)\s*)?(?:[~～∼–-]|부터)\s*',tail)
         if connector:
             endtext=tail[connector.end():]
             short=SHORT_DATE.match(endtext)

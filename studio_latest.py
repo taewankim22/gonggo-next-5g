@@ -3,7 +3,7 @@ import copy
 import json
 import re
 
-LIMIT = ('현재 Studio 설정은 제출서류·우대조건·조건별 근거를 별도로 추출하지 않습니다. '
+LIMIT = ('이 저장 결과에는 제출서류·우대조건·조건별 근거가 별도로 추출되어 있지 않습니다. '
          '아래 결과만으로 준비 완료나 지원 가능 여부를 확정할 수 없습니다. 상세 공고를 함께 확인하세요.')
 TYPES = {'모집_안내문':'대외활동·봉사', '대회_공고문':'대회·공모전',
          '장학금 신청':'장학금', '대회_포스터':'대회·공모전'}
@@ -104,4 +104,24 @@ def normalize_compact(data, pages=()):
     raw['_workflow_review']=data.get('_workflow_review','')
     raw['_studio_compact']=copy.deepcopy(data)
     raw['_schema_limits']=LIMIT
+    detailed = all(k in data for k in ('지원조건','제출서류','혜택','일정','기본정보근거'))
+    if detailed:
+        for key in ('지원조건','제출서류','혜택'):
+            raw[key] = copy.deepcopy(table(key))
+        raw['일정'] = copy.deepcopy(table('일정')) + [r for r in raw['일정'] if r.get('근거원문')]
+        raw['기본정보근거'] = copy.deepcopy(table('기본정보근거'))
+        raw['주의사항'] = [r for r in raw['주의사항'] if r.get('내용') != LIMIT]
+        raw.pop('_schema_limits',None)
+        from notice_facts import relocate
+        for row in raw['기본정보근거']:
+            row.update(relocate(row,pages))
+            if not evidence(row.get('근거원문'),row.get('근거페이지'),pages):continue
+            field=row.get('항목');text=row.get('내용','')
+            if field in ('주최주관','접수방법','접수링크'):
+                if field=='접수링크' and (not re.fullmatch(r'https?://[^\s<>]+',text) or text not in row.get('근거원문','')):continue
+                if field in raw:raw[field]=text
+    elif pages:
+        from notice_facts import recover_benefits
+        recovered = recover_benefits(pages)
+        if recovered:raw['혜택']=recovered
     return raw

@@ -22,7 +22,7 @@ def test_routed_workflow_result_questions_and_checklist_survive_navigation():
     n=ground_notice(adapt_notice(x['raw']),x['pages'])
     at.session_state.notice=n;at.session_state.raw_notice=n;at.session_state.pages=x['pages'];at.run()
     assert not at.exception
-    assert any('AI가 짚은' in e.label for e in at.expander)
+    assert any(e.label=='상세 조건 확인' for e in at.expander)
     at.button(key='nav_3').click().run()
     at.number_input(key='answer_weekly_visits').set_value(1).run()
     at.button(key='nav_4').click().run()

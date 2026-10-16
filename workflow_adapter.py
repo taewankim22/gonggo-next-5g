@@ -85,7 +85,7 @@ def adapt_notice(data):
         if items:
             representative=next((row for text,row in items if row.get('적용단계',row.get('제출단계'))=='지원단계'),items[0][1])
             n[key+'_quote']=representative.get('근거원문','');n[key+'_page']=representative.get('근거페이지','')
-    n['benefits']='\n'.join(' · '.join(row.get(k,'') for k in ('종류','내용','금액표현','금액범위','대상','지급단계') if row.get(k)) for row in tables['혜택'])
+    n['benefits']='\n'.join(' · '.join(dict.fromkeys(row.get(k,'') for k in ('혜택명','내용','지급인원','금액표현','금액범위','대상','지급단계','조건') if row.get(k))) for row in tables['혜택'])
     n['contact_information']='\n'.join(' · '.join(row.values()) for row in tables['문의처'])
     n['source_conflicts']=[f"{r.get('내용','')} ({r.get('근거페이지','미확인')}쪽)" for r in tables['주의사항']]
     n['profile_conditions_json']=json.dumps(profiles,ensure_ascii=False)
@@ -102,6 +102,8 @@ def ground_notice(notice,pages):
     else:
         raw=copy.deepcopy(notice['_structured_notice'])
     for row in raw.get('지원조건',[]):
+        from notice_facts import exclusion_context
+        row.update(exclusion_context(row,pages))
         # A quoted number is not enough: total/enrolled terms are not remaining terms.
         # Preserve the full rule as a question, but don't compare it to the user's
         # remaining_terms profile unless that specific concept is in the source.
@@ -118,8 +120,10 @@ def ground_notice(notice,pages):
                 row['만점']=''
             if re.search(r'(?:이전|직전)\s*\d+\s*개?\s*학기|\d+\s*개?\s*학기.*(?:평균|각\s*평점)|previous\s+(?:two|three|\d+)\s+(?:semester|term)',row.get('조건',''),re.I):
                 row.update(비교방법='검토',기준시점='')
-    for key in ('지원조건','제출서류','일정','혜택','주의사항'):
+    for key in ('지원조건','제출서류','일정','혜택','주의사항','기본정보근거'):
         for row in raw.get(key,[]):
+            from notice_facts import relocate
+            row.update(relocate(row,pages))
             quote=row.get('근거원문','');old=row.get('근거페이지','')
             if evidence(quote,old,pages):continue
             candidates=[str(i) for i in range(1,len(pages)+1) if evidence(quote,str(i),pages)]
@@ -133,7 +137,10 @@ def ground_notice(notice,pages):
     from deadline_guard import guard_deadline
     guard_deadline(raw,pages)
     raw['_workflow_review']=notice.get('_workflow_review','')
-    return adapt_notice(raw)
+    result=adapt_notice(raw)
+    from notice_facts import benefit_rows
+    result['benefits']='\n'.join(dict.fromkeys(r['display'] for r in benefit_rows(result,pages) if r['verified']))
+    return result
 
 def structured_documents(notice,pages):
     from core import fingerprint,evidence,normalize

@@ -76,12 +76,33 @@ def overview_model(notice, pages, source=None, now=None):
 
     audience = fact_text(notice.get('eligibility_rule'))
     audience = re.sub(r'(?m)^지원단계 · 전체 · ', '', audience)
+    audience_details = structured.get('지원조건',[])
+    audience_details = [r for r in audience_details if r.get('분류')=='지원자격']
+    if audience_details:
+        text = [r.get('조건','') for r in audience_details if r.get('조건')]
+        restrictions = [t for t in text if re.search(r'제외|제한|불가|금지',t)]
+        ordinary=list(dict.fromkeys(t for t in text if t not in restrictions))
+        main = '\n'.join(ordinary[:2]) or (text[0] if text else '')
+        from core import normalize
+        for r in structured.get('기본정보근거',[]):
+            if r.get('항목')=='모집대상' and r.get('내용') and len(r['내용'])<=250 and evidence(r.get('근거원문'),r.get('근거페이지'),pages) and normalize(r['내용']) in normalize(r.get('근거원문','')):
+                main=r['내용'];break
+        audience = main
+        if len(text)>1:audience += f'\n지원 조건 {len(text)}개'
+        if restrictions:audience += f' · 제외·제한 {len(restrictions)}개'
+        if len(text)>1:audience += '\n아래 지원 대상 자세히'
     if not audience or not grounded('eligibility', '지원조건', '지원자격'):pending.append('세부 지원 자격')
     method = fact_text(notice.get('submission_method'))
     if not method:pending.append('신청 방법')
-    elif re.search(r'온라인|홈페이지|웹|구글|폼|사이트', method) and not submission_url(method):pending.append('신청 주소')
-    benefits = fact_text(notice.get('benefits'))
-    if not benefits or ('혜택' in structured and not grounded('', '혜택')):pending.append('상금·혜택')
+    elif re.search(r'온라인|홈페이지|웹|구글|폼|사이트', method):
+        url=submission_url(method)
+        if not url or not any(url in p for p in pages):pending.append('신청 주소')
+    from notice_facts import benefit_summary
+    benefits, benefit_details = benefit_summary(notice,pages)
+    if '혜택' not in structured:benefits = fact_text(notice.get('benefits'))
+    if not benefits:pending.append('상금·혜택')
+    elif any(not r['verified'] for r in benefit_details):pending.append('일부 혜택의 표·단위')
+    if any(r['scope_pending'] for r in benefit_details):pending.append('상금 지급 인원·단위')
     # Older analyses sometimes put product requirements into documents_rule.
     # A grounded paragraph alone does not establish a complete document list.
     explicit_no_documents = bool(re.search(r'(?:제출\s*서류|별도\s*서류)[^\n]{0,12}(?:없음|없습니다|불필요)', notice.get('documents_quote', '')))
@@ -92,10 +113,13 @@ def overview_model(notice, pages, source=None, now=None):
     if conflicts:pending.append('원문 유의사항·조건 충돌')
     if not any(pages):pending.append('원문 본문')
     if source.get('coverage_note'):pending.append('분석한 문서 범위')
+    if notice.get('_schema_limits'):
+        messages.append('이전 분석에서 빠진 제출서류·세부 조건은 ‘공고 넣기’에서 다시 분석하면 확인할 수 있어요. 저장된 답변을 확인한 뒤 진행해주세요.')
     return dict(title=notice.get('notice_title') or '공고 핵심 정보',
                 kind=catalog_kind({'title':notice.get('notice_title'), 'kind':notice.get('notice_type')}),
                 deadline=deadline or '—', audience=audience or '—', method=method or '—', benefits=benefits or '—',
-                pending=list(dict.fromkeys(pending)), messages=messages, dates=dates)
+                pending=list(dict.fromkeys(pending)), messages=messages, dates=dates, benefit_details=benefit_details,
+                audience_details=audience_details)
 
 
 ICONS = {
@@ -123,5 +147,24 @@ def render_overview(notice, pages, source=None):
         title = '원문 확인이 필요한 정보' if model['pending'] else '접수 상태 안내'
         st.html('<aside class="overview-caution" role="note" aria-label="공고 확인 안내"><span class="overview-warning-icon" aria-hidden="true">!</span>'
                 '<div><strong>' + title + '</strong>' + items + messages +
-                '<p class="overview-disclaimer">현재 요약만으로 지원 가능 여부를 확정할 수 없어요.</p></div></aside>')
+                '<p class="overview-disclaimer">— 표시는 확인한 정보가 없다는 뜻이며, 혜택이나 조건이 없다는 뜻은 아니에요. 현재 요약만으로 지원 가능 여부를 확정할 수 없어요.</p></div></aside>')
+    if model['audience_details']:
+        with st.expander('지원 대상 자세히 · 제외·제한 포함',expanded=False):
+            for row in model['audience_details']:
+                st.markdown('**'+row.get('조건','')+'**')
+                scope=' · '.join(row.get(k,'') for k in ('적용대상','적용단계','예외') if row.get(k))
+                if scope:st.write(scope)
+                if row.get('근거원문'):st.text('원문 '+row.get('근거페이지','')+'쪽 · '+row['근거원문'])
+    if model['benefit_details']:
+        with st.expander('상금·혜택 자세히',expanded=False):
+            for row in model['benefit_details']:
+                st.markdown('**'+(row['display'] if row['verified'] else row.get('혜택명') or '혜택 근거 확인 필요')+'**')
+                st.write('원문 '+row.get('근거페이지','')+'쪽 · '+('본문 대조 완료' if row['verified'] else '인용·금액 대조 필요'))
+                if row.get('근거원문'):st.text(row['근거원문'])
+                if row['scope_pending']:st.write('지급 인원과 개인당·팀당 단위는 원문 표에서 확인해주세요.')
+                for key in ('대상','지급단계','조건'):
+                    from core import normalize
+                    if row.get(key) and normalize(row[key]) in normalize(row.get('근거원문','')):st.write(key+': '+row[key])
+    url = submission_url(notice.get('submission_method',''))
+    if url and any(url in page for page in pages):st.link_button('신청 페이지 열기 ↗',url)
     return model
