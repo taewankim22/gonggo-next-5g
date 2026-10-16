@@ -88,7 +88,7 @@ def test_preset_survives_rerun_and_answer_change_invalidates_result():
     at.selectbox(key='profile_preset').select('가상 B · 다른 기관 / 주 1회').run()
     at.run()
     assert at.text_input(key='answer_selected_center').value=='다른 기관'
-    assert at.selectbox(key='answer_enrollment_status').value=='재학'
+    assert at.radio(key='answer_enrollment_status').value=='재학'
     at.button(key='nav_4').click().run()
     next(b for b in at.button if b.label=='내 조건과 대조하기').click().run()
     assert not at.exception
@@ -182,7 +182,7 @@ def test_four_screens_preserve_answers_file_checklist_and_review_without_api():
         assert at.text_input(key='answer_other_facts').value=='왕복 통학 1시간'
         assert at.text_input(key='answer_selected_center').value=='다른 기관'
         assert at.number_input(key='answer_weekly_visits').value==1
-        assert at.selectbox(key='answer_enrollment_status').value=='재학'
+        assert at.radio(key='answer_enrollment_status').value=='재학'
         at.button(key='nav_4').click().run()
         assert at.checkbox(key=doc_key).value is True
         assert at.selectbox(key=apply_key).value=='해당'

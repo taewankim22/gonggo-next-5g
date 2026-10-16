@@ -16,7 +16,7 @@ ANSWERS = {'answer_'+s for s in ('enrollment_status','remaining_terms','selected
            'skills','weekly_visits','weekly_hours','long_term','review_stage',
            'unavailable_dates','other_facts','use_example')}
 EXTRAS = {'profile_preset','schedule_state','show_later_questions'}
-EXTRAS |= {'profile_overrides','profile_seeded','profile_provenance','notice_config','catalog_source','profile_revision'}
+EXTRAS |= {'profile_overrides','profile_seeded','profile_provenance','notice_config','catalog_source','profile_revision','situation_responses'}
 
 def allowed(key):
     return key in FIELDS | ANSWERS | EXTRAS or bool(re.fullmatch(

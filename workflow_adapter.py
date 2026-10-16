@@ -104,6 +104,9 @@ def ground_notice(notice,pages):
     for row in raw.get('지원조건',[]):
         from notice_facts import exclusion_context
         row.update(exclusion_context(row,pages))
+        # A language skill or interest area is not the applicant's degree major.
+        if row.get('대조항목')=='전공' and not re.search(r'전공|학과|major|department',row.get('근거원문',''),re.I):
+            row.update(대조항목='',비교방법='검토',기준값='')
         # A quoted number is not enough: total/enrolled terms are not remaining terms.
         # Preserve the full rule as a question, but don't compare it to the user's
         # remaining_terms profile unless that specific concept is in the source.
@@ -185,12 +188,13 @@ def structured_questions(notice,stage):
         q=link_question(notice,text,category)
         if q['id'] in seen:continue
         seen.add(q['id'])
-        q.update(rule=scoped(row),quote=row.get('근거원문',''),page=row.get('근거페이지',''),context=scoped(row))
+        q.update(rule=scoped(row),quote=row.get('근거원문',''),page=row.get('근거페이지',''),context=scoped(row),
+                 source_condition=dict(row))
         if (row.get('적용단계')=='선발 후·활동 중' and stage not in ('선발 후·활동 중','활동 종료 후')) or (row.get('적용단계')=='활동 종료 후' and stage!='활동 종료 후'):later.append(q)
         else:active.append(q)
     if '사회적' in notice.get('preference_rule',''):
         q=link_question(notice,SOCIAL_QUESTION,'preference','social_support')
         source=next((r for r in notice['_structured_notice']['지원조건'] if r.get('대조항목')=='사회적배려'),{})
-        if source:q.update(quote=source.get('근거원문',''),page=source.get('근거페이지',''))
+        if source:q.update(rule=scoped(source),context=scoped(source),quote=source.get('근거원문',''),page=source.get('근거페이지',''),source_condition=dict(source))
         active.append(q)
     return active,later,[]

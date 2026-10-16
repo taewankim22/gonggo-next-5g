@@ -11,7 +11,7 @@ def retain_same_document_inputs(state, source_hash):
     if source_hash != state.get('source_hash'):return {}
     return {k:deepcopy(v) for k,v in state.items() if
             (k.startswith(('answer_','question_','doc_','fact_')) and k!='answer_use_example')
-            or k in ('profile_overrides','profile_seeded','profile_provenance','schedule_state')}
+            or k in ('profile_overrides','profile_seeded','profile_provenance','schedule_state','situation_responses')}
 
 def checkpoint(state):
     from browser_draft import single_snapshot
@@ -49,12 +49,14 @@ def seed_basic(state,notice,profile):
         widget='answer_'+key
         prior=seeded.get(key)
         if provenance.get(key)=='이번 공고 답변':continue
-        if widget in state and (key not in seeded or state[widget]!=prior):
+        placeholders=(None,'','모르겠어요','모름')
+        if widget in state and (key not in seeded or state[widget]!=prior) and not (state[widget] in placeholders and prior in placeholders):
             provenance[key]='이번 공고 답변';continue
         conditions=[c for c in atomic_conditions(notice) if c['field']==key]
-        period=conditions[0]['period'] if conditions else ''
+        periods={c['period'] for c in conditions}
+        period=next(iter(periods)) if len(periods)==1 else ''
         # Legacy extraction has a visible reference month for Hyundai, etc.
-        if not period:
+        if not period and len(periods)<=1:
             import re
             m=re.search(r'(20\d{2})년\s*(\d{1,2})월\s*기준',notice.get('eligibility_rule',''))
             if m:period=f'{m[1]}-{int(m[2]):02d}'

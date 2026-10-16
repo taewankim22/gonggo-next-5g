@@ -95,7 +95,7 @@ def test_subject_change_persists_and_updates_documents_in_real_app(monkeypatch):
         at.session_state[key]=value
     at.run()
     widget='question_'+fingerprint(original)[:12]+'_'+fingerprint(SOCIAL_QUESTION)[:12]
-    at.selectbox(key=widget).select('해당').run()
+    at.radio(key=widget).set_value('해당').run()
     at.button(key='nav_4').click().run()
     rows=at.session_state['preparation']['checklist']
     row=next(r for r in rows if social_document(r))
@@ -103,8 +103,8 @@ def test_subject_change_persists_and_updates_documents_in_real_app(monkeypatch):
     done='doc_'+fingerprint(original)[:12]+'_'+row['id']+'_done'
     at.checkbox(key=done).check().run()
     at.button(key='nav_3').click().run()
-    assert at.selectbox(key=widget).value=='해당'
-    at.selectbox(key=widget).select('해당 없음').run()
+    assert at.radio(key=widget).value=='해당'
+    at.radio(key=widget).set_value('해당 없음').run()
     at.button(key='nav_4').click().run()
     assert at.checkbox(key=done).disabled
     assert next(r for r in at.session_state['preparation']['checklist'] if social_document(r))['applicability']=='해당 없음'

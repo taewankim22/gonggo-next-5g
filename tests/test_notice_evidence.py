@@ -135,10 +135,10 @@ def test_latest_widget_edit_reaches_preparation_when_navigation_arrives_together
     for k,v in dict(notice=n,pages=f['pages'],pdf=data,source_hash=fingerprint(data),
         source_filename='isolated.hwp',last_mode='실제 AI 분석',route='review',screen=3).items():at.session_state[k]=v
     at.run(timeout=20)
-    field=next(w for w in at.text_input if '교육(수료)생' in w.label)
+    field=next(w for w in at.text_input if w.label=='팀 구성·참가 조건을 확인해주세요')
     with patch('upstage_client.run_agent',side_effect=AssertionError('Navigation must not call API')):
         field.set_value('분리된 QA 답변')  # No intermediate rerun before clicking Next.
-        next(b for b in at.button if b.label=='준비 목록과 다음 행동 보기 →').click().run(timeout=20)
+        next(b for b in at.button if b.label=='준비 목록 확인하기 →').click().run(timeout=20)
         assert at.session_state.screen==4 and not at.exception
         assert '분리된 QA 답변' in at.session_state.preparation['answers']['question_answers'].values()
         done=next(w for w in at.checkbox if '참가신청서' in w.label)

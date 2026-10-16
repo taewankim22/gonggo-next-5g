@@ -55,6 +55,7 @@ def go(screen):
 
 def clear_answers():
     st.session_state.pop('_draft_restored',None)
+    st.session_state.pop('situation_responses',None)
     for key in list(st.session_state):
         if key.startswith(('answer_', 'question_', 'doc_')) or key in ('profile_preset','schedule_state','show_later_questions','draft_answers','preparation','result','review_hash','profile','raw_review'):
             st.session_state.pop(key, None)
@@ -277,101 +278,12 @@ if screen==2:
                 st.markdown(n['_workflow_review'])
 
 if screen==3:
-        st.subheader('03 / 나에게 필요한 질문')
-        n=st.session_state.notice
-        items=document_items(n,st.session_state.pages)
-        scope=st.session_state.source_hash[:12]
-        keys=question_keys(n,{'selected_center':st.session_state.get('answer_selected_center','')})
-        seed_basic(st.session_state,n,st.session_state.get('common_profile',{}))
-        st.caption('모르는 항목은 건너뛰세요. 비어 있는 답변은 조건 불일치가 아니라 확인 필요로 남깁니다.')
-        def apply_preset():
-            chosen=st.session_state.get('profile_preset')
-            if chosen is None or 'notice' not in st.session_state:return
-            values={'enrollment_status':'휴학' if 'A' in chosen else '재학','remaining_terms':3,'selected_center':'여명학교' if 'A' in chosen else '다른 기관','skills':'중국어 가능, 교육 현장 활용 의사 있음','weekly_visits':2 if 'A' in chosen else 1,'weekly_hours':4,'long_term':'가능','review_stage':'지원 준비 중','other_facts':'4년제 대학, 지역·통학 조건은 미확인'} if chosen!='직접 입력' else {}
-            for item in keys:
-                default=None if item in ('remaining_terms','weekly_visits','weekly_hours') else '모르겠어요' if item in ('enrollment_status','long_term') else '지원 검토 중' if item=='review_stage' else ''
-                st.session_state['answer_'+item]=values.get(item,default)
-            st.session_state.pop('result',None)
-        if mode=='예시 화면 체험':
-            st.selectbox('답변 시작하기',['직접 입력','가상 A · 여명학교 / 주 2회','가상 B · 다른 기관 / 주 1회'],key='profile_preset',on_change=apply_preset)
-        a={}
-        if 'review_stage' in keys:
-            if st.session_state.get('answer_review_stage') not in STAGES:st.session_state['answer_review_stage']=STAGES[0]
-            a['review_stage']=st.selectbox('현재 지원 단계',STAGES,key='answer_review_stage')
-        stage=a.get('review_stage',STAGES[0])
-        for key in keys:
-            widget='answer_'+key
-            if key=='review_stage':continue
-            if key in ('remaining_terms','weekly_visits','weekly_hours'):
-                label={'remaining_terms':'공고 기준일의 잔여학기','weekly_visits':'주당 방문 가능한 횟수','weekly_hours':'주당 총 활동 가능한 시간'}[key]
-                a[key]=st.number_input(label,min_value=0,max_value=100,value=None,step=1,key=widget,placeholder='모르면 비워두세요',on_change=explicit_basic,args=(st.session_state,key))
-            elif key in ('enrollment_status','long_term'):
-                label,options={'enrollment_status':('공고 기준일의 학적',['모르겠어요','재학','휴학','수료','졸업']),
-                 'long_term':('공고의 전체 활동 기간에 참여할 수 있나요?',['모르겠어요','가능','어려움'])}[key]
-                if key=='long_term':
-                    with st.expander('활동 기간 확인'):st.write(n.get('activity_period',''))
-                value=st.selectbox(label,options,key=widget,on_change=explicit_basic,args=(st.session_state,key))
-                a[key]=None if value=='모르겠어요' else value
-            elif key=='unavailable_dates':
-                with st.expander('참석 일정 확인'):st.write(n.get('schedule_rule',''))
-                schedule_state=st.selectbox('개인 일정 확인 상태',['아직 확인하지 않음','참석 불가 일정 없음','참석 불가 일정 있음'],key='schedule_state')
-                a[key]=None if schedule_state=='아직 확인하지 않음' else '참석 불가 일정 없음' if schedule_state=='참석 불가 일정 없음' else st.text_input('참석하기 어려운 날짜·시간',key=widget,max_chars=700)
-            else:
-                label={'selected_center':'희망 활동 기관','skills':'명시된 우대와 관련된 내 역량'}[key]
-                a[key]=st.text_input(label,max_chars=700,key=widget)
-        a['profile_facts']=render_fact_overrides(n,a)
-        a['answer_provenance']=st.session_state.get('profile_provenance',{})
-        a['profile_revision']=fingerprint(st.session_state.get('common_profile',{}))
-        questions,later_questions,covered=additional_questions(n,keys,items,stage)
-        qa={}
-        def draw_question(question):
-            widget='question_'+scope+'_'+question['id']
-            if question.get('kind')=='social_support':
-                if st.session_state.get('profile_provenance',{}).get('social_support')!='이번 공고 답변':
-                    from profiles import profile_fact
-                    pv,origin=profile_fact(st.session_state.get('common_profile',{}),'social_support')
-                    if widget not in st.session_state or 'social_support' in st.session_state.get('profile_seeded',{}):
-                        st.session_state[widget]=pv if pv in ('해당','해당 없음') else '아직 모름'
-                        st.session_state.setdefault('profile_seeded',{})['social_support']=st.session_state[widget]
-                        st.session_state.setdefault('profile_provenance',{})['social_support']=origin
-                value=st.selectbox(question['text'],['아직 모름','해당','해당 없음'],key=widget,on_change=explicit_basic,args=(st.session_state,'social_support'),help='대상 여부만 답하세요. 증빙 준비는 다음 단계에서 확인합니다. 답변을 원하지 않으면 아직 모름으로 두세요.')
-                qa[question['text']]=None if value=='아직 모름' else value
-            else:
-                qa[question['text']]=st.text_input(question['text'],key=widget,max_chars=700,placeholder='모르면 비워두세요')
-            with st.expander('공고 근거 보기 · '+question['condition_label']):
-                if question.get('context'):st.write(question['context'])
-                st.write(question['rule'] or '연결할 조건을 자동으로 확정하지 못했습니다. 원문에서 직접 확인하세요.')
-                st.caption('추출 근거 후보 · '+(question['page'] or '미확인')+'쪽')
-                st.text(question['quote'] or '인용문 없음')
-        for question in questions:draw_question(question)
-        if later_questions:
-            with st.expander(f'선발 후·후속연구 단계의 질문 {len(later_questions)}개'):
-                st.caption('지금 답하지 않아도 됩니다. 숨긴 조건을 충족했다고 판단하지 않으며, 관련 단계에서는 다시 확인해야 합니다.')
-                if st.checkbox('이후 단계 질문에도 지금 답하기',key='show_later_questions'):
-                    for question in later_questions:draw_question(question)
-                else:
-                    for question in later_questions:st.write('• '+question['text'])
-        with st.expander('추가 설명 또는 질문 정리 기준 보기'):
-            extra=st.text_input('그 밖에 알려줄 내용 (선택)',key='answer_other_facts',max_chars=1000)
-            st.caption('공고 추출값에 명시된 조건으로 기본 질문을 고릅니다. 서류 준비 질문은 아래 체크리스트로 옮겼습니다. 질문이 보이지 않는다고 해당 조건을 충족한 것은 아닙니다.')
-            for q in covered:st.caption('중복 질문·허용 안내로 정리: '+q)
-        a['question_answers']=qa
-        a['condition_answers']=bind_answers(n,keys,questions+later_questions,a,qa)
-        a['preference_facts']={'social_support':qa.get(SOCIAL_QUESTION)} if has_social(n) else {}
-        for fact in a.get('profile_facts',{}).values():
-            if fact['field']=='social_support' and has_social(n):
-                fact.update(value=qa.get(SOCIAL_QUESTION),origin=st.session_state.get('profile_provenance',{}).get('social_support','이번 공고 답변'))
-        a['deferred_questions']=[q['text'] for q in later_questions if q['text'] not in qa]
-        a['other_facts']='\n'.join([q+' '+(v or '미입력') for q,v in qa.items()]+([extra] if extra else []))
-        if st.session_state.get('draft_answers') != a:
-            st.session_state.pop('result',None)
-        st.session_state.draft_answers=a
-        st.button('준비 목록과 다음 행동 보기 →',type='primary',on_click=go,args=(4,),use_container_width=True)
-        st.button('← 핵심 확인으로',on_click=go,args=(2,))
-        if '_next_screen' in st.session_state:
-            st.session_state.screen=st.session_state.pop('_next_screen')
-            st.session_state.route='review'
-            st.rerun()
+    from situation_ui import render_situation
+    render_situation(st.session_state.notice,st.session_state.pages,mode,go)
+    if '_next_screen' in st.session_state:
+        st.session_state.screen=st.session_state.pop('_next_screen')
+        st.session_state.route='review'
+        st.rerun()
 
 if screen==4:
         n=st.session_state.notice

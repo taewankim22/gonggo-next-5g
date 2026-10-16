@@ -21,7 +21,11 @@ def question_keys(notice, answers=None):
         keys.append('skills')
     for key in ('weekly_visits','weekly_hours'):
         if notice.get('minimum_'+key):keys.append(key)
-    if notice.get('activity_period'):keys.append('long_term')
+    # A scholarship payment/support period is not an attendance commitment.
+    activity_duty = notice.get('commitment_rule','')
+    if notice.get('_structured_notice'):
+        activity_duty=' '.join(r.get('조건','') for r in notice['_structured_notice'].get('지원조건',[]) if r.get('분류')=='활동의무')
+    if notice.get('activity_period') and re.search(r'활동|참여|참석|교육|봉사|수행|근무',activity_duty):keys.append('long_term')
     if notice.get('documents_rule') or notice.get('required_documents'):keys.append('review_stage')
     if has_attendance(notice):keys.append('unavailable_dates')
     return keys
@@ -116,7 +120,7 @@ def next_steps(notice, answers, rows, cards=None):
     timing=[r['name'] for r in rows if r['stage']==UNKNOWN and r['source_found'] and r['applicability']!='해당 없음']
     if timing:add('서류 제출 시점 확인',' · '.join(timing)+' — 현재 필수 누락으로 계산하지 않았습니다. 원문의 제출 시점을 먼저 확인하세요.')
     labels={'enrollment_status':'공고 기준일의 학적','remaining_terms':'잔여학기','selected_center':'희망 활동 기관','skills':'명시된 우대 역량','weekly_visits':'활동 횟수','weekly_hours':'활동 시간','long_term':'전체 활동 기간 참여 가능 여부','unavailable_dates':'참석 일정'}
-    unanswered=[labels[k] for k in question_keys(notice,answers) if k in labels and (answers.get(k) is None or answers.get(k)=='')]
+    unanswered=[labels[k] for k in answers.get('active_question_keys',question_keys(notice,answers)) if k in labels and (answers.get(k) is None or answers.get(k)=='')]
     unanswered += [q for q,a in answers.get('question_answers',{}).items() if missing(a)]
     if unanswered:add('아직 답하지 않은 조건', unanswered[0]+(f' 외 {len(unanswered)-1}개' if len(unanswered)>1 else '')+' — 모르면 확인 필요로 남겨두세요.')
     documents=next((c for c in (cards or []) if c['key']=='documents' and c['verified'] and c['presence']=='명시'),None)
