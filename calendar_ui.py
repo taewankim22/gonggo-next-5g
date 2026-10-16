@@ -93,7 +93,7 @@ def render_calendar(groups,render_card):
     for date in dates:
         st.markdown('### '+date+f' · {len(by_day[date])}개 공고')
         for group in by_day[date]:
-            with st.expander(group['record']['title']+' · '+group['priority']['label']):
+            with st.expander(group['record']['title']):
                 render_card(group,suffix=date)
     if undated:
         with st.expander(f'상시·마감일 확인 필요 · {len(undated)}개 공고',expanded=not by_day):

@@ -148,8 +148,6 @@ def render_catalog(root,connection=None):
     view=st.radio('공고 보기',['목록 보기','캘린더 보기'],horizontal=True,key='catalog_view',label_visibility='collapsed')
     selected=filter_groups(groups,kind,status,interest)
     st.write(f'필터에 맞는 공고 {len(selected)}개 · 저장된 분석 결과 기준')
-    if not any(f.get('state')=='known' for f in st.session_state.get('common_profile',{}).values()):
-        st.info('저장된 내 정보가 없습니다. 조건은 확인 필요로 표시됩니다.')
     st.button('내 정보 수정',on_click=route,args=('profile',),key='catalog_edit_profile')
     def draw(group,suffix=''):
         render_catalog_card(root,group,suffix)
@@ -160,34 +158,49 @@ def render_catalog(root,connection=None):
 
 
 def render_catalog_card(root,group,suffix=''):
+    import html
     from catalog import available_record
+    from catalog_summary import public_summary
     from calendar_ui import render_deadline_details
     record=group['record']
+    summary=public_summary(root,group)
+    def fact(label,value):
+        st.markdown('<p><strong>'+html.escape(label)+'</strong> · '+html.escape(value)+'</p>',unsafe_allow_html=True)
+    def preview(key,limit=180):
+        items=summary[key]
+        if not items:return '원문 확인 필요'
+        value=items[0]['text']
+        if len(value)>limit:value=value[:limit].rstrip()+'…'
+        if len(items)>1:value+=f' · 문서별 안내 {len(items)}건'
+        return value
     with st.container(border=True):
-        st.subheader(record['title']);render_deadline_details(group)
-        st.link_button('수집 출처 원문',record['source_url']);st.caption('원문 확인 '+record['checked_at'])
-        if record.get('source_kind'):st.write(record['source_kind'])
-        for alias in group.get('source_aliases',[]):st.link_button('동일 문서를 게시한 다른 출처',alias)
-        if record.get('storage')=='live':
-            st.write('**인터넷에서 가져온 공고 · AI 분석**')
-            st.write(f'이 공고에서 분석한 문서 {len(group["documents"])}개 · 각 문서의 조건을 함께 대조합니다.')
+        st.subheader(record['title'])
         for caution in group['cautions']:st.warning(caution)
         if not group['documents']:
-            st.warning('원문 확보 또는 분석 미완료 · 조건 추천에서 제외했습니다.');return
-        st.write('**'+group['priority']['label']+'** · '+' / '.join(group['priority']['reasons']))
-        result=group['result']
-        for title,key in [('확인된 일치','matches'),('확인 필요','unknowns')]:
-            labels=list(dict.fromkeys(r['label'] for r in result[key]))
-            summary=' / '.join(labels[:3])+ (f' 외 {len(labels)-3}개 · 아래 근거에서 확인' if len(labels)>3 else '')
-            st.write('**'+title+'** · '+(summary or '없음'))
-        for title,category in [('지원 자격 불일치','eligibility'),('우대 조건 불일치','preference')]:
-            conflicts=[r['label'] for r in result['conflicts'] if r.get('category')==category]
-            st.write('**'+title+'** · '+(' / '.join(dict.fromkeys(conflicts)) or '없음'))
-        st.caption('확인된 불일치가 없어도 전체 지원 자격을 충족한다는 뜻은 아닙니다. 추출되지 않은 조건은 원문에서 확인하세요.')
-        with st.expander('추천 이유와 원문 근거'):
-            for row in result['rows']:
-                category='우대 조건' if row.get('category')=='preference' else '지원 자격' if row.get('category')=='eligibility' else '추가 조건'
-                st.write(category+' · '+row['label']+' · '+row['status']+' · '+row['reason']);st.text(row['quote']);st.caption(row.get('document_name','')+' · '+str(row['page'])+'쪽')
+            st.warning('원문 확보 또는 분석 미완료')
+            st.link_button('공고 원문 보기',record['source_url'])
+            return
+        fact('관련 분야',summary['fields'] or '분야 정보 확인 필요')
+        fact('주최·주관',preview('organizer'))
+        fact('모집 대상 요약',preview('audience'))
+        if summary['application']:fact('신청·접수 안내',preview('application',260))
+        render_deadline_details(group)
+        st.markdown('**상금·장학금·혜택**')
+        if not summary['benefits']:
+            st.write('금액·혜택 정보 확인 필요')
+        for item in summary['benefits'][:2]:
+            # Preserve amount scopes, recipient restrictions and payment stages.
+            st.write(item['text'])
+        if len(summary['benefits'])>2:st.write(f'혜택 안내 외 {len(summary["benefits"])-2}건 · 아래 상세에서 확인')
+        with st.expander('기본 정보 자세히 · 출처'):
+            for label,key in [('주최·주관','organizer'),('모집 대상','audience'),('신청·접수 안내','application'),('상금·장학금·혜택','benefits')]:
+                for item in summary[key]:
+                    fact(label,item['text'])
+                    if len(group['documents'])>1:st.write('분석 문서: '+item['document'])
+            st.write('원문 마지막 확인: '+(record.get('checked_at') or '확인 시점 미기록'))
+            if record.get('coverage_note'):st.write(record['coverage_note'])
+            for alias in group.get('source_aliases',[]):st.link_button('동일 문서를 게시한 다른 출처',alias)
+        st.link_button('공고 원문 보기',record['source_url'])
         selected=record
         if len(group['documents'])>1:
             selected=st.selectbox('자세히 검토할 문서',group['documents'],format_func=lambda r:r.get('document_name',r['title']),key='catalog_document_'+record['id']+suffix)
