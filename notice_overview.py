@@ -82,7 +82,11 @@ def overview_model(notice, pages, source=None, now=None):
     elif re.search(r'온라인|홈페이지|웹|구글|폼|사이트', method) and not submission_url(method):pending.append('신청 주소')
     benefits = fact_text(notice.get('benefits'))
     if not benefits or ('혜택' in structured and not grounded('', '혜택')):pending.append('상금·혜택')
-    if notice.get('_schema_limits') or not grounded('documents', '제출서류'):pending.append('제출서류')
+    # Older analyses sometimes put product requirements into documents_rule.
+    # A grounded paragraph alone does not establish a complete document list.
+    explicit_no_documents = bool(re.search(r'(?:제출\s*서류|별도\s*서류)[^\n]{0,12}(?:없음|없습니다|불필요)', notice.get('documents_quote', '')))
+    if notice.get('_schema_limits') or not grounded('documents', '제출서류') or not (notice.get('required_documents') or explicit_no_documents):
+        pending.append('제출서류')
     if notice.get('_schema_limits') or not grounded('preference', '지원조건', '우대'):pending.append('우대조건')
     conflicts = [c for c in notice.get('source_conflicts', []) if not notice.get('_schema_limits') or not c.startswith(notice['_schema_limits'])]
     if conflicts:pending.append('원문 유의사항·조건 충돌')

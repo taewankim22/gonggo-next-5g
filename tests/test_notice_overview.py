@@ -48,6 +48,7 @@ def test_real_poster_keeps_known_amounts_and_expired_status():
     model = overview_model(fixture['notice'], fixture['pages'], now=NOW.replace(hour=19))
     assert '300' in model['benefits'] and model['deadline'] == '2026.08.28 · 18:00'
     assert any('마감된 공고' in m for m in model['messages'])
+    assert '제출서류' in model['pending']  # Product restrictions aren't a verified submission checklist.
     assert '신청 주소' not in model['pending']  # Postal/visit submissions don't require a URL.
 
 
