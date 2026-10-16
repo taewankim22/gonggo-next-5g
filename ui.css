@@ -88,6 +88,34 @@ button[kind="secondary"],[data-testid="stBaseButton-secondary"]{background:white
  [class*="st-key-document_card_"]{padding:12px 14px!important}.hero-body{padding:22px 18px}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+/* Step 2: facts first, with all uncertainty in one shared notice. */
+.notice-overview{margin:8px 0 0}
+.overview-eyebrow{color:var(--pink);font-size:.86rem;font-weight:750;margin-bottom:10px}
+h1.overview-title{font-size:clamp(1.45rem,2.5vw,1.9rem)!important;font-weight:800!important;line-height:1.4!important;letter-spacing:-.045em;margin:0 0 24px!important;padding:0!important;word-break:keep-all;overflow-wrap:anywhere}
+.overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.overview-card{display:flex;align-items:flex-start;gap:16px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px;min-width:0;box-shadow:0 3px 10px #24202b03}
+.overview-icon{color:var(--pink);background:#fcf0f5;border-radius:50%;width:48px;height:48px;display:grid;place-items:center;flex:0 0 48px}
+.overview-icon img{width:26px;height:26px}
+.overview-copy{min-width:0;flex:1}
+.overview-label{font-size:.9rem;font-weight:650;color:#585b64;margin:2px 0 10px}
+.overview-value{font-size:1rem;line-height:1.65;font-weight:550;white-space:pre-line;overflow-wrap:anywhere}
+.overview-deadline .overview-value{font-size:1.5rem;font-weight:780;line-height:1.45;letter-spacing:-.035em}
+.overview-method .overview-value{font-size:1.05rem;font-weight:650}
+.overview-caution{display:flex;align-items:flex-start;gap:16px;padding:20px 24px;background:#fffaf0;border:1px solid #f4dfad;border-radius:15px;color:#352c1e;margin:0}
+.overview-warning-icon{display:grid;place-items:center;border:2px solid #b77612;color:#b77612;width:28px;height:28px;border-radius:50%;font-weight:800;flex:0 0 28px;line-height:1;margin-top:2px}
+.overview-caution strong{font-size:1rem}.overview-caution p{margin:7px 0 0;line-height:1.65;font-size:.92rem;overflow-wrap:anywhere}
+.overview-caution .overview-important{font-weight:650;color:#923c18}
+.overview-caution .overview-disclaimer{font-size:.86rem;color:#5e5648}
+.st-key-overview_next button{min-height:54px!important;font-size:1rem!important}
+@media(max-width:640px){
+ .overview-grid{grid-template-columns:1fr;gap:12px}
+ .overview-card{padding:18px;gap:14px}
+ .overview-icon{width:42px;height:42px;flex-basis:42px}.overview-icon img{width:24px;height:24px}
+ h1.overview-title{margin-bottom:20px!important}
+ .overview-label{font-size:.85rem;margin-bottom:6px}.overview-value{font-size:.96rem}
+ .overview-deadline .overview-value{font-size:1.4rem}
+ .overview-caution{padding:16px;gap:12px}.overview-caution p{font-size:.88rem}
+}
 /* Calendar uses native buttons and date strings; no timezone-shifting JS dates. */
 .st-key-calendar_grid{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px!important;gap:6px!important}
 .st-key-calendar_grid [data-testid="stHorizontalBlock"]{gap:6px!important;flex-wrap:nowrap!important}

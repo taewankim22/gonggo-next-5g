@@ -205,49 +205,47 @@ if screen==1:
     if 'notice' in st.session_state:
         st.button('분석한 공고 계속 보기 →',on_click=go,args=(2,),use_container_width=True)
 
-if screen in (2,3,4) and st.session_state.get('notice',{}).get('_schema_limits'):
+if screen in (3,4) and st.session_state.get('notice',{}).get('_schema_limits'):
         st.warning(st.session_state.notice['_schema_limits'])
 
 if screen==2:
-    st.subheader('02 / 이 공고의 핵심')
     if 'notice' in st.session_state:
         if 'raw_notice' not in st.session_state:st.session_state.raw_notice=dict(st.session_state.notice)
         st.session_state.notice=map_image_page(st.session_state.notice,st.session_state.get('source_info',{}))
         n=st.session_state.notice
-        st.write('**'+n['notice_title']+'**')
-        if st.session_state.get('catalog_source',{}).get('coverage_note'):
-            st.info(st.session_state.catalog_source['coverage_note'])
-            st.caption(st.session_state.get('evidence_basis',''))
-        if not any(st.session_state.pages):st.warning('대조할 원문 본문이 없습니다. 인용과 조건은 원본 파일에서 직접 확인해주세요.')
-        if n['application_deadline']:
-            st.caption('공고상 접수 마감: '+n['application_deadline'])
-            try:
-                if dt.date.fromisoformat(n['application_deadline'])<dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date():st.warning('마감된 공고입니다. 조건 검증·연습용으로 확인하세요.')
-            except ValueError: st.warning('마감일 형식을 확인하지 못했습니다. 원문을 확인하세요.')
-        with st.expander('원본과 추출된 조건',expanded=False):
+        from notice_overview import render_overview
+        overview=render_overview(n,st.session_state.pages,st.session_state.get('catalog_source'))
+        with st.container(key='overview_next'):
+            st.button('내 상황 입력하기 →',type='primary',on_click=go,args=(3,),use_container_width=True)
+        st.button('← 공고 넣기로',on_click=go,args=(1,))
+        with st.expander('원문과 근거 확인',expanded=False):
             st.download_button('원본 다운로드',st.session_state.pdf,st.session_state.get('source_filename','공고원문.pdf'),st.session_state.get('source_info',{}).get('mime','application/pdf'))
             notice_export={'source_filename':st.session_state.get('source_filename'),'source_sha256':st.session_state.source_hash,'source_info':st.session_state.get('source_info',{}),'notice':n,'raw_notice':st.session_state.get('raw_notice'),'notice_execution':st.session_state.get('notice_trace',{}),'evidence_basis':st.session_state.get('evidence_basis','예시 데이터')}
             st.download_button('공고 추출 결과 저장 (JSON)',json.dumps(notice_export,ensure_ascii=False,indent=2),'5G_공고다음_공고추출.json','application/json')
             st.caption('추출값은 AI 또는 예시 데이터입니다. 원문 인용의 정확성은 검토 카드에서 따로 표시합니다.')
-            for k in ('eligibility','preference','commitment','documents','schedule'):
-                st.write(n[k+'_rule'])
+            source=st.session_state.get('catalog_source',{})
+            if source.get('url'):st.link_button('공고 원문 보기',source['url'])
+            if source.get('checked_at'):st.write('원문 마지막 확인: '+source['checked_at'])
+            if source.get('coverage_note'):st.write(source['coverage_note'])
+            if not any(st.session_state.pages):st.write('대조할 원문 본문이 없습니다. 원본 파일에서 직접 확인해주세요.')
+            if overview['dates']['evidence']:
+                st.markdown('**접수 일정 근거**')
+                for event in overview['dates']['evidence']:
+                    st.write(event['stage']+' · '+event['page']+'쪽')
+                    st.text(event['quote'])
+                    st.write(event['timezone_basis'])
+            if n.get('deadline_note'):st.write(n['deadline_note'])
+            if n.get('_schema_limits'):st.write(n['_schema_limits'])
+            conflicts=[c for c in n.get('source_conflicts',[]) if not n.get('_schema_limits') or not c.startswith(n['_schema_limits'])]
+            if conflicts:
+                st.markdown('**원문 유의사항과 추후 공지**')
+                for conflict in conflicts:st.write(conflict)
             if st.session_state.get('source_info',{}).get('kind')=='hangul':
                 st.caption('아래는 Studio Parse가 읽어낸 본문입니다. 표 배치와 페이지 번호는 원본과 다를 수 있습니다.')
                 for page_number,page_text in enumerate(st.session_state.pages,1):
                     st.text(f'변환 본문 {page_number}페이지\n{page_text}')
-        if n.get('_structured_notice') and n['source_conflicts']:
-            with st.expander('원문 유의사항과 추후 공지',expanded=False):
-                for conflict in n['source_conflicts']:st.write(conflict)
-        else:
-            for conflict in n['source_conflicts']: st.caption('확인할 점 · '+conflict)
-        st.write('**지원 대상**')
-        st.write(n.get('eligibility_rule') or '명시되지 않음 · 원문 확인')
-        st.write('**제출 방법**')
-        st.text(n.get('submission_method') or '원문 또는 운영기관에 확인')
-        if n.get('_structured_notice'):
-            st.write('**혜택과 지원 범위**')
-            st.write(n.get('benefits') or '금액·혜택 미기재 · 상세 공고 확인')
-            with st.expander('조건·서류·일정을 항목별로 확인',expanded=False):
+        with st.expander('상세 조건 확인',expanded=False):
+            if n.get('_structured_notice'):
                 for title in ('지원조건','제출서류','일정','혜택'):
                     entries=n['_structured_notice'].get(title,[])
                     if entries:
@@ -255,13 +253,13 @@ if screen==2:
                         from core import evidence
                         checked=[{**r,'인용 대조':'본문에서 확인' if evidence(r.get('근거원문',''),r.get('근거페이지',''),st.session_state.pages) else '원문 직접 확인 필요'} for r in entries]
                         st.dataframe(checked,hide_index=True,use_container_width=True)
+            else:
+                for k,label in [('eligibility','지원 대상'),('preference','우대조건'),('commitment','활동 의무'),('documents','제출서류'),('schedule','일정')]:
+                    st.markdown('**'+label+'**');st.write(n.get(k+'_rule') or '원문 확인 필요')
             if n.get('_workflow_review'):
-                with st.expander('Studio AI 요약 · 원문 대조 필요' if n.get('_schema_limits') else 'AI가 짚은 불일치와 다음 행동',expanded=not bool(n.get('_schema_limits'))):
-                    st.caption('AI 요약의 날짜·금액·자격은 원문과 대조해주세요. 개인의 지원 자격을 확정한 결과는 아닙니다.')
-                    st.markdown(n['_workflow_review'])
-        st.caption('다음 단계에서는 이 공고에 필요한 질문만 보여드립니다.')
-        st.button('내 상황 입력하기 →',type='primary',on_click=go,args=(3,),use_container_width=True)
-        st.button('← 공고 넣기로',on_click=go,args=(1,))
+                st.markdown('**AI 요약 · 원문 대조 필요**')
+                st.caption('AI 요약의 날짜·금액·자격은 원문과 대조해주세요. 개인의 지원 자격을 확정한 결과는 아닙니다.')
+                st.markdown(n['_workflow_review'])
 
 if screen==3:
         st.subheader('03 / 나에게 필요한 질문')
