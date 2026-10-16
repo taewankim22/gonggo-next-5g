@@ -30,7 +30,7 @@ def source_blocks(pages):
                 block.append(following)
             text = '\n'.join(block).strip()
             # A flattened table may contain the next stage on the same line.
-            boundary = re.search(r'(?:서류\s*심사|최종\s*결과|합격자|결과)\s*발표|면접\s*(?:심사|일정)',text)
+            boundary = OTHER.search(text,APPLICATION.search(text).end())
             if boundary: text = text[:boundary.start()].strip()
             if text: yield text, str(page_no)
 
@@ -93,8 +93,11 @@ def document_deadlines(notice,pages,record):
             ambiguous=True;continue
         if len(dates)>1:
             between=quote[dates[0][1]:dates[-1][0]]
-            if not re.search(r'[~～∼–-]|부터',between):
+            if dates[-1][2]<dates[0][2] or not re.search(r'[~～∼–-]|부터',between):
                 ambiguous=True;continue
+        elif re.match(r'\s*\.?\s*(?:\([^)]{1,4}\))?\s*(?:[~～∼–-]|부터)\s*\d',quote[dates[0][1]:]):
+            # An invalid/omitted range end must not turn the start into a deadline.
+            ambiguous=True;continue
         elif not re.search(r'마감|까지|종료|도착|소인|접수\s*일|신청\s*일|제출\s*기한',quote):
             # A lone start date is not a closing date.
             ambiguous=True;continue

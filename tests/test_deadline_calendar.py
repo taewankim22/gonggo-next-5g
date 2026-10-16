@@ -29,6 +29,8 @@ def test_missing_time_not_borrowed_from_results_or_contact():
     e=data['events'][0];assert e['time']==''
     assert event_status(e,dt.datetime(2026,10,16,23,30,tzinfo=KST))=='오늘 마감 · 시간 확인 필요'
     assert event_status(e,dt.datetime(2026,10,17,tzinfo=KST))=='마감'
+    assert detail('접수기간 2026.10.1 ~ 2026.10.16 문의 09:00~18:00')['events'][0]['time']==''
+    assert detail('접수기간 2026.10.1 ~ 2026.10.16 결과 발표 2026.10.20 18:00')['events'][0]['time']==''
 
 def test_exact_time_midnight_month_and_year_boundaries():
     e=detail('접수 마감 2026-12-31 18:00 KST')['events'][0]
@@ -58,6 +60,8 @@ def test_explicit_foreign_timezone_and_unknown_timezone():
     '활동 기간 2026-10-01 ~ 2026-10-16',
     '모집기간 2026-10-01',
     '신청 마감 2026-02-30',
+    '신청기간 2026-10-01 ~ 10-32까지',
+    '신청기간 2026-10-16 ~ 2026-10-01까지',
     '응모 자격: 2026-10-16까지 만 18세가 되는 사람',
     '신청자 2026-10-16까지 재학한 사람',
     '1차 접수 마감 2026-10-16 / 2차 접수 마감 2026-11-16',
