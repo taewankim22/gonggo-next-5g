@@ -90,7 +90,6 @@ def navigation():
             st.button(label,on_click=route,args=(target,),key='entry_'+target,use_container_width=True,type='primary' if view==target else 'secondary')
     st.caption('바로 시작')
     st.button('공고 직접 확인하기',on_click=start_upload,key='menu_upload',use_container_width=True)
-    st.button('나에게 맞는 공고 보기',on_click=route,args=('catalog',),key='menu_catalog',use_container_width=True)
     st.divider()
 
 def resume_notices():
@@ -129,7 +128,7 @@ def entry(root,connection=None):
 def render_catalog(root,connection=None):
     from catalog import load_catalog
     from catalog_ranking import personalized_catalog
-    st.header('나에게 맞는 공고 보기')
+    st.header('공고 찾기')
     from discovery_ui import render_discovery
     render_discovery(root,connection)
     from calendar_ui import filter_groups,render_calendar
