@@ -131,7 +131,7 @@ def render_catalog(root,connection=None):
     st.header('공고 찾기')
     from discovery_ui import render_discovery
     render_discovery(root,connection)
-    from calendar_ui import filter_groups,render_calendar
+    from calendar_ui import filter_groups
     from catalog_categories import KINDS,matches_kind
     st.subheader('분석한 공고')
     catalog=load_catalog(root)
@@ -146,15 +146,10 @@ def render_catalog(root,connection=None):
         with cols[0]:kind=st.selectbox('종류',kinds,key='catalog_kind',format_func=lambda k:f'{k} ({kind_counts[k]}건)')
         with cols[1]:status=st.selectbox('접수 상태',statuses,key='catalog_status')
         with cols[2]:interest=st.text_input('관심 분야 검색',placeholder='교육, 장학, 공모전 등',key='catalog_search')
-    view=st.radio('공고 보기',['목록 보기','캘린더 보기'],horizontal=True,key='catalog_view',label_visibility='collapsed')
     selected=filter_groups(groups,kind,status,interest)
     st.write(f'필터에 맞는 공고 {len(selected)}개 · 저장된 분석 결과 기준')
     st.button('내 정보 수정',on_click=route,args=('profile',),key='catalog_edit_profile')
-    def draw(group,suffix=''):
-        render_catalog_card(root,group,suffix)
-    if view=='캘린더 보기':render_calendar(selected,draw)
-    else:
-        for group in selected:draw(group)
+    for group in selected:render_catalog_card(root,group)
     if not selected:
         if kind!='전체' and not kind_counts[kind]:
             st.info(f'아직 분석을 마친 {kind} 공고가 없습니다. 최신 공고 찾기 또는 주최기관 원문 연결로 추가할 수 있습니다.')

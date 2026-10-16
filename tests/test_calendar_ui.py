@@ -21,33 +21,25 @@ def app(monkeypatch,tmp_path):
     return at
 
 
-def test_calendar_state_filter_review_return_and_no_calls(app):
+def test_list_filter_review_return_and_no_calls(app):
     at=app
     with patch('upstage_client.run_agent',side_effect=AssertionError('No paid calls')), \
          patch('national_search.tavily_search',side_effect=AssertionError('No searches')), \
          patch('national_search.board_candidates',side_effect=AssertionError('No network')):
-        assert at.radio(key='catalog_view').value=='목록 보기'
+        # An existing session that last used the calendar must still show cards.
+        at.session_state.catalog_view='캘린더 보기'
         at.text_input(key='catalog_search').set_value('통영').run(timeout=20)
-        at.radio(key='catalog_view').set_value('캘린더 보기').run(timeout=20)
-        at.selectbox(key='calendar_month').set_value('2026-08').run(timeout=20)
-        at.button(key='calendar_date_2026-08-28').click().run(timeout=20)
-        assert at.selectbox(key='calendar_day').value=='2026-08-28'
+        assert not any(r.key=='catalog_view' for r in at.radio)
+        assert not any(s.key in ('calendar_month','calendar_day') for s in at.selectbox)
         assert any('18:00' in m.value for m in at.markdown)
         next(b for b in at.button if b.label=='이 공고 검토하기').click().run(timeout=20)
         assert at.session_state.route=='review'
         at.button(key='nav_3').click().run(timeout=20)
         at.session_state.answer_other_facts='테스트 답변 유지'
         at.button(key='entry_catalog').click().run(timeout=20)
-        assert at.selectbox(key='calendar_month').value=='2026-08'
-        assert at.selectbox(key='calendar_day').value=='2026-08-28'
         assert at.text_input(key='catalog_search').value=='통영'
-        at.radio(key='catalog_view').set_value('목록 보기').run(timeout=20)
-        at.radio(key='catalog_view').set_value('캘린더 보기').run(timeout=20)
-        assert at.selectbox(key='calendar_month').value=='2026-08'
         assert at.session_state.answer_other_facts=='테스트 답변 유지'
-        at.button(key='calendar_next').click().run(timeout=20)
-        assert at.selectbox(key='calendar_month').value=='2026-09'
-        assert at.selectbox(key='calendar_day').value=='전체 날짜'
+        assert any(b.label=='이 공고 검토하기' for b in at.button)
         assert not at.exception
 
 
@@ -57,12 +49,8 @@ def test_category_filters_stay_available_with_zero_results_and_no_api(app,monkey
          patch('national_search.tavily_search',side_effect=AssertionError('No searches')):
         at.selectbox(key='catalog_kind').set_value('해커톤').run(timeout=20)
         assert any('아직 분석을 마친 해커톤' in i.value for i in at.info)
-        at.radio(key='catalog_view').set_value('캘린더 보기').run(timeout=20)
         assert at.selectbox(key='catalog_kind').value=='해커톤'
         at.selectbox(key='catalog_kind').set_value('공모전').run(timeout=20)
-        at.selectbox(key='calendar_month').set_value('2026-08').run(timeout=20)
-        assert at.button(key='calendar_date_2026-08-28').label=='28일 · 1건'
-        at.radio(key='catalog_view').set_value('목록 보기').run(timeout=20)
         assert at.selectbox(key='catalog_kind').value=='공모전'
         next(b for b in at.button if b.label=='이 공고 검토하기').click().run(timeout=20)
         at.button(key='entry_catalog').click().run(timeout=20)
@@ -87,11 +75,9 @@ def test_multiple_events_same_day_and_unknowns_keep_filtering(app,monkeypatch):
     many.append(unknown)
     monkeypatch.setattr('catalog_ranking.personalized_catalog',lambda *a:many)
     at=app
-    at.radio(key='catalog_view').set_value('캘린더 보기').run(timeout=20)
-    at.selectbox(key='calendar_month').set_value('2026-08').run(timeout=20)
-    assert at.button(key='calendar_date_2026-08-28').label=='28일 · 5건'
-    assert any('외 3건' in m.value for m in at.markdown)
-    assert any('상시·마감일 확인 필요 · 1개' in e.label for e in at.expander)
+    at.run(timeout=20)
+    assert len([b for b in at.button if b.label=='이 공고 검토하기'])==6
     at.selectbox(key='catalog_status').set_value('마감일 확인 필요').run(timeout=20)
-    assert not any(b.key=='calendar_date_2026-08-28' and not b.disabled for b in at.button)
+    assert len([b for b in at.button if b.label=='이 공고 검토하기'])==1
+    assert any(h.value=='일정 미기재 테스트' for h in at.subheader)
     assert not at.exception
